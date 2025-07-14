@@ -1,23 +1,19 @@
-using ExaPowerIO, Test, PowerModels
+using ExaPowerIO, Test, PowerModels, PGLib
 
 PowerModels.silence()
 ExaPowerIO.silence()
 
 CASES = [
-    (Float16, "pglib_opf_case3_lmbd.m", false),
-    (Float32, "pglib_opf_case3_lmbd.m", false),
-    (Float64, "pglib_opf_case3_lmbd.m", false)
+    (Float16, "pglib_opf_case3_lmbd.m"),
+    (Float32, "pglib_opf_case3_lmbd.m"),
+    (Float64, "pglib_opf_case3_lmbd.m")
 ]
 
 @testset "ExaPowerIO parsing tests" begin
     datadir = "../data/"
-    for (type, dataset, is_custom) in CASES
-        pp_output = if is_custom
-            ExaPowerIO.parse_file(type, dataset; datadir, out_type=NamedTuple)
-        else
-            ExaPowerIO.parse_pglib(type, dataset, datadir; out_type=NamedTuple)
-        end
-        path = joinpath("../data/", dataset)
+    for (type, dataset) in CASES
+        pp_output = ExaPowerIO.parse_pglib(type, dataset, datadir; out_type=NamedTuple)
+        path = joinpath(PGLib.PGLib_opf, dataset)
         pm_output = PowerModels.parse_file(path)
         PowerModels.standardize_cost_terms!(pm_output, order = 2)
         PowerModels.calc_thermal_limits!(pm_output)
