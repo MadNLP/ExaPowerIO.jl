@@ -1,0 +1,10 @@
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+PowerModels = "c36e90e8-916a-50a6-bd94-075b64ef4655"
+PowerParser = "14903efe-9500-4d7f-a589-7ab7e15da6de"
+PGLib = "07a8691f-3d11-4330-951b-3c50f98338be"
+
+[compat]
+BenchmarkTools = "~1.6"
+PowerModels = "~0.21"
+PGLib = "0.2.1"
