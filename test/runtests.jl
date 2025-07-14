@@ -81,6 +81,6 @@ ROW_TYPES = [
 
 @testset "ExaPowerIO isbits tests" begin
     for row_type in ROW_TYPES
-        @assert(isbitstype(row_type), string(row_type) * " is not bits")
+        @test isbitstype(row_type)
     end
 end
