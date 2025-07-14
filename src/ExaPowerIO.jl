@@ -1,4 +1,4 @@
-module PowerParser
+module ExaPowerIO
 
 import JLD2
 import PGLib
@@ -32,7 +32,7 @@ function parse_file(
     out_type=Data{T}
 ) :: Union{Data{T}, NamedTuple} where T <: Real
     if out_type != Data && out_type != NamedTuple
-        @error "Argument out_type must have value NamedTuple | PowerParser.Data"
+        @error "Argument out_type must have value NamedTuple | ExaPowerIO.Data"
     end
     _, f = splitdir(fname)
     name, _ = splitext(f)
@@ -60,10 +60,10 @@ function parse_file(
 end
 
 function silence()
-    @info "PowerParser.jl has been silenced for the rest of the session."
+    @info "ExaPowerIO.jl has been silenced for the rest of the session."
     global SILENCED = true
 end
 
 export parse_file, parse_pglib, Data, BusData, BranchData, StorageData, GenData
 
-end # module PowerParser
+end # module ExaPowerIO

@@ -3,10 +3,10 @@ using Pkg
 Pkg.activate(@__DIR__)
 Pkg.develop(path=dirname(@__DIR__))
 
-using PowerParser, BenchmarkTools, PowerModels, PGLib
+using ExaPowerIO, BenchmarkTools, PowerModels, PGLib
 
 PowerModels.silence()
-PowerParser.silence()
+ExaPowerIO.silence()
 
 function run_pm(dataset :: String)
     path = joinpath(PGLib.PGLib_opf, dataset)
@@ -22,8 +22,8 @@ BENCH_CASES = [
      (Float64, "pglib_opf_case20758_epigrids.m"),
 ]
 for (type, dataset) in BENCH_CASES
-    @info "PowerParser.jl " * dataset
-    @btime PowerParser.parse_pglib($type, $dataset, $datadir; out_type=NamedTuple) samples=10
+    @info "ExaPowerIO.jl " * dataset
+    @btime ExaPowerIO.parse_pglib($type, $dataset, $datadir; out_type=NamedTuple) samples=10
     @info "PowerModels.jl " * dataset
     @btime run_pm($dataset) samples=10
 end

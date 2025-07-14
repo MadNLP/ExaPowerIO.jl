@@ -1,7 +1,7 @@
-using PowerParser, Test, PowerModels, BenchmarkTools
+using ExaPowerIO, Test, PowerModels
 
 PowerModels.silence()
-PowerParser.silence()
+ExaPowerIO.silence()
 
 CASES = [
     (Float16, "pglib_opf_case3_lmbd.m", false),
@@ -9,13 +9,13 @@ CASES = [
     (Float64, "pglib_opf_case3_lmbd.m", false)
 ]
 
-@testset "PowerParser parsing tests" begin
+@testset "ExaPowerIO parsing tests" begin
     datadir = "../data/"
     for (type, dataset, is_custom) in CASES
         pp_output = if is_custom
-            PowerParser.parse_file(type, dataset; datadir, out_type=NamedTuple)
+            ExaPowerIO.parse_file(type, dataset; datadir, out_type=NamedTuple)
         else
-            PowerParser.parse_pglib(type, dataset, datadir; out_type=NamedTuple)
+            ExaPowerIO.parse_pglib(type, dataset, datadir; out_type=NamedTuple)
         end
         path = joinpath("../data/", dataset)
         pm_output = PowerModels.parse_file(path)
@@ -83,7 +83,7 @@ ROW_TYPES = [
     StorageData{Float64},
 ]
 
-@testset "PowerParser isbits tests" begin
+@testset "ExaPowerIO isbits tests" begin
     for row_type in ROW_TYPES
         @assert(isbitstype(row_type), string(row_type) * " is not bits")
     end

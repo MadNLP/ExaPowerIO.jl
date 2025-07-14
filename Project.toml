@@ -1,4 +1,4 @@
-name = "PowerParser"
+name = "ExaPowerIO"
 uuid = "14903efe-9500-4d7f-a589-7ab7e15da6de"
 authors = ["Archim Jhunjhunwala <archimj@mit.edu>"]
 version = "0.1.0"
