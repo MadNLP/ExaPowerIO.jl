@@ -91,47 +91,74 @@ struct Data{T <: Real}
     ref_buses :: Vector{Int}
 end
 
-MATPOWER_VAR_TYPES = [
-    (name = "version", type = String);
-    (name = "baseMVA", type = Float64);
-    (name = "bus", type = BusData);
-    (name = "gen", type = GenData);
-    (name = "gencost", type = GenData);
-    (name = "branch", type = BranchData);
-    (name = "storage", type = StorageData);
-]
+const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "bus", "gen", "gencost", "branch", "storage"]
+const INIT_WORDS_LEN = 25
+const GITHUB_ISSUES = "https://github.com/MadNLP/ExaPowerIO.jl/issues."
 
 function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
-    lines = split(read(open(fname), String), "\n")
+    fstring = read(open(fname), String)
+    lines :: Vector{SubString{String}} = split(fstring, "\n")
     in_array = false
-    cur_key = ""
+    cur_key :: String = ""
     version = ""
-    baseMVA = T(0.0)
+    baseMVA :: T = T(0.0)
     bus :: Vector{BusData{T}} = []
     gen :: Vector{GenData{T}} = []
     branch :: Vector{BranchData{T}} = []
     storage :: Vector{StorageData{T}} = []
     line_ind = 1
-    line = lines[line_ind]
+    line :: SubString{String} = lines[line_ind]
     data_patt = r"[^\s=;\[\]]+|[=;\[\]]"
     col_patt = r"[^\s]+"
     type = Missing
     row_num = 1
-    comment = ""
-    col_inds = Dict()
+    comment = SubString(line, 1, 0)
+    col_inds :: Dict{String, Int} = Dict()
+    words :: Vector{SubString{String}} = let line = line
+        [SubString(line, 1, 0) for _ in 1:INIT_WORDS_LEN]
+    end
+    items = [T(0.0) for _ in 1:INIT_WORDS_LEN]
+    reallocated = false
 
     while true
-        words = [m.match for m in eachmatch(data_patt, line)]
+        if length(line) != 0 && line[1] == '%'
+            comment = line
+            line = lines[line_ind += 1] :: SubString{String}
+            continue
+        end
+        num_words = 0
+        for (i, m) in enumerate(eachmatch(data_patt, line))
+            num_words = i
+            if reallocated
+                continue
+            elseif i > length(words) # need to grow words vec
+                reallocated = true
+                continue
+            end
+            words[i] = m.match :: SubString{String}
+        end
+        if reallocated
+            println(stderr, "ExaPowerIO.jl was forced to grow the words vector to length $num_words. Please ensure your input file is valid, and then open an issue at $GITHUB_ISSUES")
+            reallocated = false
+            let line = line
+                words = [SubString(line, 1, 0) for _ in 1:num_words]
+            end
+            items = [T(0.0) for _ in 1:num_words]
+            continue
+        end
 
         if in_array && length(line) != 0 && line[1] != '%'
             squares = findall(s -> s == "]", words)
             first_sq = length(squares) == 0 ? typemax(Int64) : squares[1]
             first_semi = length(squares) == 0 ? typemax(Int64) : squares[1]
-            items :: Vector{T} = map(s -> parse(T, s), words[1:min(min(first_semi - 1, first_sq - 1), length(words) - 1)])
+            num_items = min(min(first_semi - 1, first_sq - 1), num_words - 1)
+            for i in 1:num_items
+                items[i] = parse(T, words[i]) :: T
+            end
 
-            if length(items) == 0 && length(words) >= 2 && words[length(words)-1] == "]" && words[length(words)] == ";"
+            if num_items == 0 && num_words >= 2 && words[num_words-1] == "]" && words[num_words] == ";"
                 in_array = false
-            elseif length(words) != 0 && last(words) != ";"
+            elseif num_words != 0 && words[num_words] != ";"
                 error("Invalid matpower file. Line $(line_ind) array doesn't end with ; or ];")
             elseif length(items) != 0
                 if cur_key == "bus"
@@ -175,9 +202,11 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                     # pglib puts the column name as "2" for some reason, so we cant use col_inds
                     model_poly = items[1] == 2
                     n = round(Int, items[col_inds["n"]])
-                    function normalize_cost(v :: Tuple{Int, T})
-                        i, c = v
-                        return model_poly ? baseMVA ^ (n-i) * c : c
+                    normalize_cost = let baseMVA = baseMVA, items = items
+                        function normalize_cost(i :: Int)
+                            c = items[first_cost_col+i-1]
+                            return model_poly ? baseMVA ^ (n-i) * c : c
+                        end
                     end
                     gen[row_num] = GenData(
                         round(Int, gen[row_num].bus),
@@ -195,7 +224,7 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                         items[col_inds["startup"]],
                         items[col_inds["shutdown"]],
                         n,
-                        Tuple(map(normalize_cost, enumerate(items[first_cost_col:first_cost_col+2]))),
+                        ntuple(normalize_cost, 3)
                     )
                 elseif cur_key == "branch"
                     ratea_i = items[col_inds["rateA"]] / baseMVA
@@ -276,19 +305,16 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
         elseif length(line) != 0 && line[1] != '%' && words[1] != "function"
             col_inds = Dict()
             columns = [m.match for m in eachmatch(col_patt, comment)][2:end]
-            comment = ""
-            for (i, column) in enumerate(columns)
-                merge!(col_inds, Dict(column => i))
-            end
+            comment = SubString(line, 1, 0)
+            merge!(col_inds, Dict(column => i for (i, column) in enumerate(columns)))
             cur_key = ""
             type = Any
 
-            for cur in MATPOWER_VAR_TYPES
-                full_name = "mpc.$(cur.name)"
+            for key in MATPOWER_KEYS
+                full_name = "mpc.$key"
                 idxs = findall(s -> s == full_name, words) 
                 if idxs != []
-                    cur_key = cur.name
-                    type = cur.type
+                    cur_key = key
                     break
                 end
             end
@@ -297,22 +323,18 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                 error("Error parsing data. Invalid variable assignment on line $(line_ind).")
             end
             if cur_key == "version"
-                raw_data = words[length(words)-1]
+                raw_data = words[num_words-1]
                 version = String(raw_data[2:length(raw_data)-1])
             elseif cur_key == "baseMVA"
-                baseMVA = parse(T, words[length(words)-1])
+                baseMVA = parse(T, words[num_words-1]) :: T
             else
                 in_array = true
                 row_num = 1
-                line = String(join(words[findall(s -> s == "[", words)[1]+1:end], " "))
-                continue
             end
-        elseif length(line) != 0 && line[1] == '%'
-            comment = line
         end
 
         if line_ind < length(lines)
-            line = lines[line_ind += 1]
+            line = lines[line_ind += 1] :: SubString{String}
         else
             break
         end
