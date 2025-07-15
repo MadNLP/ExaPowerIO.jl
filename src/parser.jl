@@ -91,9 +91,54 @@ struct Data{T <: Real}
     ref_buses :: Vector{Int}
 end
 
+const EMPTY_SUBSTRING = SubString("", 1, 0)
 const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "bus", "gen", "gencost", "branch", "storage"]
 const INIT_WORDS_LEN = 25
 const GITHUB_ISSUES = "https://github.com/MadNLP/ExaPowerIO.jl/issues."
+
+struct WordedString
+    s :: SubString{String}
+    extra_ends :: String
+end
+
+function Base.iterate(worded_string :: WordedString)
+    iterate(worded_string, 1)
+end
+
+function Base.iterate(worded_string :: WordedString, start :: Int) :: Union{Nothing, Tuple{SubString{String}, Int}}
+    s = SubString(worded_string.s, start, length(worded_string.s))
+    left = 1
+    while left <= length(s) && isspace(s[left])
+        left += 1
+    end
+    if left > length(s)
+        return nothing
+    end
+    should_end = c -> isspace(c) || contains(worded_string.extra_ends, c)
+    right = left
+    while right <= length(s) && !should_end(s[right])
+        right += 1
+    end
+    # right is non-inclusive
+    if should_end(s[left])
+        right += 1
+    end
+    (SubString(s, left, right - 1), right + start - 1)
+end
+
+function Base.length(worded_string :: WordedString)
+    is_end = c -> isspace(c) || contains(worded_string.extra_ends, c)
+    len = 0
+    last_was_end = false
+    for c in worded_string.s
+        if last_was_end
+            len += 1
+        elseif (last_was_end = is_end(c))
+            len += 1
+        end
+    end
+    len
+end
 
 function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
     fstring = read(open(fname), String)
@@ -108,15 +153,11 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
     storage :: Vector{StorageData{T}} = []
     line_ind = 1
     line :: SubString{String} = lines[line_ind]
-    data_patt = r"[^\s=;\[\]]+|[=;\[\]]"
-    col_patt = r"[^\s]+"
     type = Missing
     row_num = 1
-    comment = SubString(line, 1, 0)
+    comment = EMPTY_SUBSTRING
     col_inds :: Dict{String, Int} = Dict()
-    words :: Vector{SubString{String}} = let line = line
-        [SubString(line, 1, 0) for _ in 1:INIT_WORDS_LEN]
-    end
+    words :: Vector{SubString{String}} = [EMPTY_SUBSTRING for _ in 1:INIT_WORDS_LEN]
     items = [T(0.0) for _ in 1:INIT_WORDS_LEN]
     reallocated = false
 
@@ -127,21 +168,17 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
             continue
         end
         num_words = 0
-        for (i, m) in enumerate(eachmatch(data_patt, line))
+        for (i, word) in enumerate(WordedString(line, "=;[]"))
             num_words = i
-            if reallocated
-                continue
-            elseif i > length(words) # need to grow words vec
-                reallocated = true
-                continue
-            end
-            words[i] = m.match :: SubString{String}
+            reallocated && continue
+            i > length(words) && (reallocated = true; continue)
+            words[i] = word
         end
         if reallocated
             println(stderr, "ExaPowerIO.jl was forced to grow the words vector to length $num_words. Please ensure your input file is valid, and then open an issue at $GITHUB_ISSUES")
             reallocated = false
             let line = line
-                words = [SubString(line, 1, 0) for _ in 1:num_words]
+                words = [EMPTY_SUBSTRING for _ in 1:num_words]
             end
             items = [T(0.0) for _ in 1:num_words]
             continue
@@ -303,10 +340,9 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                 row_num += 1
             end
         elseif length(line) != 0 && line[1] != '%' && words[1] != "function"
-            col_inds = Dict()
-            columns = [m.match for m in eachmatch(col_patt, comment)][2:end]
-            comment = SubString(line, 1, 0)
-            merge!(col_inds, Dict(column => i for (i, column) in enumerate(columns)))
+            col_inds = Dict(column => i for (i, column) in
+                            enumerate(Base.Iterators.drop(WordedString(comment, ""), 1)))
+            comment = EMPTY_SUBSTRING
             cur_key = ""
             type = Any
 
