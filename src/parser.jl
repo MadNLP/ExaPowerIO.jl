@@ -106,6 +106,9 @@ function Base.iterate(worded_string :: WordedString)
 end
 
 function Base.iterate(worded_string :: WordedString, start :: Int) :: Union{Nothing, Tuple{SubString{String}, Int}}
+    if start > length(worded_string.s)
+        return nothing
+    end
     s = SubString(worded_string.s, start, length(worded_string.s))
     left = 1
     while left <= length(s) && isspace(s[left])
@@ -129,13 +132,13 @@ end
 function Base.length(worded_string :: WordedString)
     is_end = c -> isspace(c) || contains(worded_string.extra_ends, c)
     len = 0
-    last_was_end = false
+    last_was_end = true
     for c in worded_string.s
-        if last_was_end
-            len += 1
-        elseif (last_was_end = is_end(c))
+        cur_is_end = is_end(c)
+        if (last_was_end && !cur_is_end) || cur_is_end
             len += 1
         end
+        last_was_end = cur_is_end
     end
     len
 end

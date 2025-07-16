@@ -17,7 +17,8 @@ for (i, arg) in enumerate(ARGS)
     end
 end
 COMPARE = "--compare" in ARGS
-@info "Running benchmarks with num-samples: $NUM_SAMPLES, compare to PowerModels: $COMPARE"
+INTERMEDIATE = "--intermediate" in ARGS
+@info "Running benchmarks with num-samples: $NUM_SAMPLES, compare to PowerModels: $COMPARE, benchmark intermediate steps: $INTERMEDIATE"
 
 function run_pm(dataset :: String)
     path = joinpath(PGLib.PGLib_opf, dataset)
@@ -32,13 +33,34 @@ BENCH_CASES = [
      (Float32, "pglib_opf_case10192_epigrids.m"),
      (Float64, "pglib_opf_case20758_epigrids.m"),
 ]
+
+function display_btimed(btimed :: NamedTuple)
+    display(btimed[(:time, :bytes, :alloc, :gctime)])
+end
+
 for (type, dataset) in BENCH_CASES
-    @info "ExaPowerIO.jl " * dataset
-    result = @benchmark ExaPowerIO.parse_pglib($type, $dataset, $datadir; out_type=NamedTuple) samples=NUM_SAMPLES
-    display(result)
+    if INTERMEDIATE
+        @info "ExaPowerIO.jl: parsing $dataset to structs"
+        parsed = @btimed ExaPowerIO.parse_pglib($type, $dataset, $datadir; out_type=ExaPowerIO.Data) samples=NUM_SAMPLES
+        display_btimed(parsed)
+        @info "ExaPowerIO.jl: converting $dataset struct to named tuple"
+        result = @btimed ExaPowerIO.struct_to_nt($(parsed.value))
+        display_btimed(result)
+        @info "ExaPowerIO.jl: total"
+        display((
+            time = result.time+parsed.time,
+            bytes = result.bytes+parsed.bytes,
+            alloc = result.alloc+parsed.alloc,
+            gctime = result.gctime+parsed.gctime
+        ))
+    else
+        @info "ExaPowerIO.jl " * dataset
+        result = @btimed ExaPowerIO.parse_pglib($type, $dataset, $datadir; out_type=NamedTuple) samples=NUM_SAMPLES
+        display_btimed(result)
+    end
     if COMPARE
         @info "PowerModels.jl " * dataset
-        result = @benchmark run_pm($dataset) samples=NUM_SAMPLES
-        display(result)
+        result = @btimed run_pm($dataset) samples=NUM_SAMPLES
+        display_btimed(result)
     end
 end
