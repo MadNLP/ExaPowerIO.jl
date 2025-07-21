@@ -16,12 +16,76 @@
     gen :: Vector{GenData{T}}
     branch :: Vector{BranchData{T}}
     storage :: Vector{StorageData{T}}
-    ratea :: Vector{T}
-    arc :: Vector{Tuple{Int, Int, Int}}
-    ref_buses :: Vector{Int}
-end</code></pre><p><code>version</code>, <code>baseMVA</code>, <code>bus</code>, <code>gen</code>, <code>branch</code>, and <code>storage</code> all corespond to members of the mpc object created by a matpower file. Their fields correspond exactly with the columns of the relevant <code>mpc</code> member.</p><p><code>arc</code>, <code>ratea</code>, and <code>ref_buses</code> are convenience vectors constructed using the following:</p><pre><code class="language-julia hljs">data = parse_file(T, fname; out_type=ExaPowerIO.Data)
-arc_from = [(i, b.fbus, b.tbus) for (i, b) in enumerate(data.branch)]
-arc_to = [(i, b.tbus, b.fbus) for (i, b) in enumerate(data.branch)]
-arc = [arc_from; arc_to]
-ratea = [branch[l].ratea for (l, _, _) in arc]
-ref_buses = filter(i -&gt; (bus[i]).type != 3, 1:length(Data.bus))</code></pre></div></section></article></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../dev/">« Developer Docs</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Monday 21 July 2025 18:43">Monday 21 July 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+end</code></pre><p><code>version</code>, <code>baseMVA</code>, <code>bus</code>, <code>gen</code>, <code>branch</code>, and <code>storage</code> all corespond to members of the mpc object created by a matpower file. Their fields correspond exactly with the columns of the relevant <code>mpc</code> member.</p></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.BusData" href="#ExaPowerIO.BusData"><code>ExaPowerIO.BusData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct BusData{T &lt;: Real}
+    bus_i :: Int
+    type :: Int
+    pd :: T
+    qd :: T
+    gs :: T
+    bs :: T
+    area :: Int
+    vm :: T
+    va :: T
+    baseKV :: T
+    zone :: Int
+    vmax :: T
+    vmin :: T
+end</code></pre></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.GenData" href="#ExaPowerIO.GenData"><code>ExaPowerIO.GenData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct GenData{T &lt;: Real}
+    bus :: Int
+    pg :: T
+    qg :: T
+    qmax :: T
+    qmin :: T
+    vg :: T
+    mbase :: T
+    status :: Int
+    pmax :: T
+    pmin :: T
+    i :: Int
+    model_poly :: Bool
+    startup :: T
+    shutdown :: T
+    n :: Int
+    c :: NTuple{3, T}
+end</code></pre></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.BranchData" href="#ExaPowerIO.BranchData"><code>ExaPowerIO.BranchData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct BranchData{T &lt;: Real}
+    fbus :: Int
+    tbus :: Int
+    r :: T
+    x :: T
+    b :: T
+    ratea ::T
+    rateb :: T
+    ratec :: T
+    ratio :: T
+    angle :: T
+    status :: Int
+    angmin :: T
+    angmax :: T
+    ratea_sq :: T
+    c1 :: T
+    c2 :: T
+    c3 :: T
+    c4 :: T
+    c5 :: T
+    c6 :: T
+    c7 :: T
+    c8 :: T
+end</code></pre></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.StorageData" href="#ExaPowerIO.StorageData"><code>ExaPowerIO.StorageData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct StorageData{T &lt;: Real}
+    storage_bus :: T
+    ps :: Int
+    qs :: T
+    energy :: T
+    energy_rating :: T
+    charge_rating :: T
+    discharge_rating :: T
+    charge_efficiency :: T
+    discharge_efficiency :: T
+    thermal_rating :: T
+    qmin :: T
+    qmax :: T
+    r :: T
+    x :: T
+    p_loss :: T
+    q_loss :: T
+    status :: Int
+end</code></pre></div></section></article></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../dev/">« Developer Docs</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Monday 21 July 2025 22:10">Monday 21 July 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
