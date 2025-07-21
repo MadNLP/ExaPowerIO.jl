@@ -79,6 +79,34 @@ struct GenData{T <: Real}
     c :: NTuple{3, T}
 end
 
+"""
+    struct Data{T <: Real}
+        version :: String
+        baseMVA :: T
+        bus :: Vector{BusData{T}}
+        gen :: Vector{GenData{T}}
+        branch :: Vector{BranchData{T}}
+        storage :: Vector{StorageData{T}}
+        ratea :: Vector{T}
+        arc :: Vector{Tuple{Int, Int, Int}}
+        ref_buses :: Vector{Int}
+    end
+```version```, ```baseMVA```, ```bus```, ```gen```, ```branch```, and ```storage```
+all corespond to members of the mpc object created by a matpower file.
+Their fields correspond exactly with the columns of the relevant ```mpc``` member.
+
+```arc```, ```ratea```, and ```ref_buses```
+are convenience vectors constructed using the following:
+
+```julia
+data = parse_file(T, fname; out_type=ExaPowerIO.Data)
+arc_from = [(i, b.fbus, b.tbus) for (i, b) in enumerate(data.branch)]
+arc_to = [(i, b.tbus, b.fbus) for (i, b) in enumerate(data.branch)]
+arc = [arc_from; arc_to]
+ratea = [branch[l].ratea for (l, _, _) in arc]
+ref_buses = filter(i -> (bus[i]).type != 3, 1:length(Data.bus))
+```
+"""
 struct Data{T <: Real}
     version :: String
     baseMVA :: T
@@ -457,7 +485,18 @@ end
 
 should_recurse(fields) :: Bool =
     all(typeof(field) == Symbol for field in fields) && !isempty(fields)
-function struct_to_nt(data :: T) :: NamedTuple where {T}
+"""
+    struct_to_nt(data :: T) :: NamedTuple where T
+
+This is a general purpose function for converting structs to named tuples.
+
+It is used internally when ```out_type=NamedTuple``` is passed to ```parse_pglib``` or ```parse_file```,
+and is more expensive than the actual parsing in both cases.
+
+We export this function for those wishing to compare the performance of ```out_type=ExaPowerIO.Data``` with ```out_type=NamedTuple```,
+as well as benchmarking reasons.
+"""
+function struct_to_nt(data :: T) :: NamedTuple where T
     result = NamedTuple()
     for field in fieldnames(T)
         val = getfield(data, field)

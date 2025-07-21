@@ -10,7 +10,7 @@ ExaPowerIO.silence()
 
 NUM_SAMPLES = 10
 for (i, arg) in enumerate(ARGS)
-    if arg == "--num-samples"
+    if arg == "--num-samples" || arg == "-n"
         global NUM_SAMPLES
         NUM_SAMPLES = ARGS[i+1]
         break
