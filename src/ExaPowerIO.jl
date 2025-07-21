@@ -96,6 +96,6 @@ function silence()
     global SILENCED = true
 end
 
-export parse_file, parse_pglib, struct_to_nt, Data
+export parse_file, parse_pglib, struct_to_nt, Data, BusData, GenData, BranchData, StorageData
 
 end # module ExaPowerIO
