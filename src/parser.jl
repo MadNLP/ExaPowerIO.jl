@@ -1,6 +1,23 @@
 # FOR CONVENIENCE, the MATPOWER file spec
 # https://matpower.app/manual/matpower/DataFileFormat.html
 
+"""
+    struct BusData{T <: Real}
+        bus_i :: Int
+        type :: Int
+        pd :: T
+        qd :: T
+        gs :: T
+        bs :: T
+        area :: Int
+        vm :: T
+        va :: T
+        baseKV :: T
+        zone :: Int
+        vmax :: T
+        vmin :: T
+    end
+"""
 struct BusData{T <: Real}
     bus_i :: Int
     type :: Int
@@ -16,6 +33,32 @@ struct BusData{T <: Real}
     vmax :: T
     vmin :: T
 end
+"""
+    struct BranchData{T <: Real}
+        fbus :: Int
+        tbus :: Int
+        r :: T
+        x :: T
+        b :: T
+        ratea ::T
+        rateb :: T
+        ratec :: T
+        ratio :: T
+        angle :: T
+        status :: Int
+        angmin :: T
+        angmax :: T
+        ratea_sq :: T
+        c1 :: T
+        c2 :: T
+        c3 :: T
+        c4 :: T
+        c5 :: T
+        c6 :: T
+        c7 :: T
+        c8 :: T
+    end
+"""
 struct BranchData{T <: Real}
     fbus :: Int
     tbus :: Int
@@ -40,6 +83,27 @@ struct BranchData{T <: Real}
     c7 :: T
     c8 :: T
 end
+"""
+    struct StorageData{T <: Real}
+        storage_bus :: T
+        ps :: Int
+        qs :: T
+        energy :: T
+        energy_rating :: T
+        charge_rating :: T
+        discharge_rating :: T
+        charge_efficiency :: T
+        discharge_efficiency :: T
+        thermal_rating :: T
+        qmin :: T
+        qmax :: T
+        r :: T
+        x :: T
+        p_loss :: T
+        q_loss :: T
+        status :: Int
+    end
+"""
 struct StorageData{T <: Real}
     storage_bus :: T
     ps :: Int
@@ -59,6 +123,26 @@ struct StorageData{T <: Real}
     q_loss :: T
     status :: Int
 end
+"""
+    struct GenData{T <: Real}
+        bus :: Int
+        pg :: T
+        qg :: T
+        qmax :: T
+        qmin :: T
+        vg :: T
+        mbase :: T
+        status :: Int
+        pmax :: T
+        pmin :: T
+        i :: Int
+        model_poly :: Bool
+        startup :: T
+        shutdown :: T
+        n :: Int
+        c :: NTuple{3, T}
+    end
+"""
 struct GenData{T <: Real}
     bus :: Int
     pg :: T
@@ -71,7 +155,6 @@ struct GenData{T <: Real}
     pmax :: T
     pmin :: T
     i :: Int
-    # making these unions is better code, but then GenData.c is not bits
     model_poly :: Bool
     startup :: T
     shutdown :: T
@@ -87,25 +170,10 @@ end
         gen :: Vector{GenData{T}}
         branch :: Vector{BranchData{T}}
         storage :: Vector{StorageData{T}}
-        ratea :: Vector{T}
-        arc :: Vector{Tuple{Int, Int, Int}}
-        ref_buses :: Vector{Int}
     end
 ```version```, ```baseMVA```, ```bus```, ```gen```, ```branch```, and ```storage```
 all corespond to members of the mpc object created by a matpower file.
 Their fields correspond exactly with the columns of the relevant ```mpc``` member.
-
-```arc```, ```ratea```, and ```ref_buses```
-are convenience vectors constructed using the following:
-
-```julia
-data = parse_file(T, fname; out_type=ExaPowerIO.Data)
-arc_from = [(i, b.fbus, b.tbus) for (i, b) in enumerate(data.branch)]
-arc_to = [(i, b.tbus, b.fbus) for (i, b) in enumerate(data.branch)]
-arc = [arc_from; arc_to]
-ratea = [branch[l].ratea for (l, _, _) in arc]
-ref_buses = filter(i -> (bus[i]).type != 3, 1:length(Data.bus))
-```
 """
 struct Data{T <: Real}
     version :: String
@@ -114,9 +182,6 @@ struct Data{T <: Real}
     gen :: Vector{GenData{T}}
     branch :: Vector{BranchData{T}}
     storage :: Vector{StorageData{T}}
-    ratea :: Vector{T}
-    arc :: Vector{Tuple{Int, Int, Int}}
-    ref_buses :: Vector{Int}
 end
 
 const EMPTY_SUBSTRING = SubString("", 1, 0)
@@ -407,13 +472,7 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
         end
     end
 
-    arc_from = [(i, b.fbus, b.tbus) for (i, b) in enumerate(branch)]
-    arc_to = [(i, b.tbus, b.fbus) for (i, b) in enumerate(branch)]
-    arc = [arc_from; arc_to]
-    ref_buses = filter(i -> (bus[i]).type != 3, 1:length(bus))
-    ratea = [branch[l].ratea for (l, _, _) in arc]
-
-    return Data(version, baseMVA, bus, gen, branch, storage, ratea, arc, ref_buses)
+    return Data(version, baseMVA, bus, gen, branch, storage)
 end
 
 function standardize_cost_terms!(data :: Data{T}, order) where T <: Real

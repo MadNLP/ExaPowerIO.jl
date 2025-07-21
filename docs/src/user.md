@@ -10,4 +10,8 @@ ExaPowerIO.struct_to_nt
 The default value for the ```out_type``` parameter of both ```parse_pglib``` and ```parse_file``` is ```ExaPowerIO.Data```:
 ```@docs
 ExaPowerIO.Data
+ExaPowerIO.BusData
+ExaPowerIO.GenData
+ExaPowerIO.BranchData
+ExaPowerIO.StorageData
 ```
