@@ -58,6 +58,8 @@ end
         c7 :: T
         c8 :: T
     end
+
+fbus and tbus are indices into the Data.bus Vector, not bus_i values
 """
 struct BranchData{T <: Real}
     fbus :: Int
@@ -142,6 +144,8 @@ end
         n :: Int
         c :: NTuple{3, T}
     end
+
+bus is an index into the Data.bus Vector, not bus_i values
 """
 struct GenData{T <: Real}
     bus :: Int
@@ -185,7 +189,7 @@ struct Data{T <: Real}
 end
 
 const EMPTY_SUBSTRING = SubString("", 1, 0)
-const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "bus", "gen", "gencost", "branch", "storage"]
+const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "bus", "gen", "gencost", "branch", "storage", "areas"]
 const INIT_WORDS_LEN = 25
 const GITHUB_ISSUES = "https://github.com/MadNLP/ExaPowerIO.jl/issues."
 
@@ -256,6 +260,7 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
     words :: Vector{SubString{String}} = [EMPTY_SUBSTRING for _ in 1:INIT_WORDS_LEN]
     items = [T(0.0) for _ in 1:INIT_WORDS_LEN]
     reallocated = false
+    bus_map :: Dict{Int, Int} = Dict()
 
     while true
         if length(line) != 0 && line[1] == '%'
@@ -264,7 +269,10 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
             continue
         end
         num_words = 0
-        for (i, word) in enumerate(WordedString(line, "=;[]"))
+        for (i, word) in enumerate(WordedString(line, "=;[]%"))
+            if word == "%"
+                break
+            end
             num_words = i
             reallocated && continue
             i > length(words) && (reallocated = true; continue)
@@ -290,6 +298,9 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
             end
 
             if num_items == 0 && num_words >= 2 && words[num_words-1] == "]" && words[num_words] == ";"
+                if cur_key == "bus"
+                    bus_map = Dict(bus.bus_i => i for (i, bus) in enumerate(bus))
+                end
                 in_array = false
             elseif num_words != 0 && words[num_words] != ";"
                 error("Invalid matpower file. Line $(line_ind) array doesn't end with ; or ];")
@@ -311,18 +322,17 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                         items[col_inds["Vmin"]],
                     ))
                 elseif cur_key == "gen"
-                    mbase = items[col_inds["mBase"]]
                     push!(gen, GenData(
-                        round(Int, items[col_inds["bus"]]),
-                        items[col_inds["Pg"]] / mbase,
-                        items[col_inds["Qg"]] / mbase,
-                        items[col_inds["Qmax"]] / mbase,
-                        items[col_inds["Qmin"]] / mbase,
+                        bus_map[round(Int, items[col_inds["bus"]])],
+                        items[col_inds["Pg"]] / baseMVA,
+                        items[col_inds["Qg"]] / baseMVA,
+                        items[col_inds["Qmax"]] / baseMVA,
+                        items[col_inds["Qmin"]] / baseMVA,
                         items[col_inds["Vg"]],
-                        mbase,
+                        items[col_inds["mBase"]],
                         round(Int, items[col_inds["status"]]),
-                        items[col_inds["Pmax"]] / mbase,
-                        items[col_inds["Pmin"]] / mbase,
+                        items[col_inds["Pmax"]] / baseMVA,
+                        items[col_inds["Pmin"]] / baseMVA,
                         row_num,
                         false,
                         T(0),
@@ -389,8 +399,8 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                     b_fr :: T = braw / T(2.0)
                     b_to :: T = b_fr
                     push!(branch, BranchData(
-                        round(Int, items[col_inds["fbus"]]),
-                        round(Int, items[col_inds["tbus"]]),
+                        bus_map[round(Int, items[col_inds["fbus"]])],
+                        bus_map[round(Int, items[col_inds["tbus"]])],
                         r,
                         xraw,
                         braw,
@@ -469,6 +479,48 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
             line = lines[line_ind += 1] :: SubString{String}
         else
             break
+        end
+    end
+
+    has_gen = [false for _ in 1:length(bus) ]
+    for gen in gen
+        if gen.status == 1
+            has_gen[gen.bus] = true
+        end
+    end
+    for (i, b) in enumerate(bus)
+        if has_gen[i] && b.type == 1
+            bus[i] = BusData(
+                b.bus_i,
+                2,
+                b.pd,
+                b.qd,
+                b.gs,
+                b.bs,
+                b.area,
+                b.vm,
+                b.va,
+                b.baseKV,
+                b.zone,
+                b.vmax,
+                b.vmin
+            )
+        elseif !has_gen[i] && b.type == 2
+            bus[i] = BusData(
+                b.bus_i,
+                1,
+                b.pd,
+                b.qd,
+                b.gs,
+                b.bs,
+                b.area,
+                b.vm,
+                b.va,
+                b.baseKV,
+                b.zone,
+                b.vmax,
+                b.vmin
+            )
         end
     end
 

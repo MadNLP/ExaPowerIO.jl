@@ -7,8 +7,8 @@ using Documenter, ExaPowerIO, Literate
 
 const _PAGES = [
     "Introduction" => "index.md",
-    "Developer Docs" => "dev.md",
     "User Docs" => "user.md",
+    "Developer Docs" => "dev.md",
 ]
 
 makedocs(;
