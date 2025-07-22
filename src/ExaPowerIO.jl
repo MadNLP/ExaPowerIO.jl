@@ -68,7 +68,7 @@ function parse_file(
     _, f = splitdir(fname)
     name, _ = splitext(f)
     cached_path = nothing
-    named_tuple = out_type != Data{T}
+    struct_output = out_type <: Data
     if !isnothing(datadir)
         cached_path = joinpath(datadir, "$(name)_$T.jld2")
         if !isdir(datadir)
@@ -79,7 +79,7 @@ function parse_file(
     if !isnothing(cached_path) && isfile(cached_path)
         SILENCED || @info "Loading cached JLD2 file at " * cached_path
         data = JLD2.load(cached_path)["data"]
-        return named_tuple ? struct_to_nt(data) : data
+        return struct_output ? data : struct_to_nt(data)
     else
         SILENCED || @info "Loading MATPOWER file at " * fname
         data = process_ac_power_data(T, fname)
@@ -87,7 +87,7 @@ function parse_file(
             SILENCED || @info "Caching parsed matpower file to " * cached_path
             JLD2.save(cached_path, "data", data)
         end
-        return named_tuple ? struct_to_nt(data) : data
+        return struct_output ? data : struct_to_nt(data)
     end
 end
 
