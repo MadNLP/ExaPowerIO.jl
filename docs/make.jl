@@ -12,7 +12,7 @@ const _PAGES = [
 ]
 
 makedocs(;
-    sitename = "ExaModelsPower.jl",
+    sitename = "ExaPowerIO.jl",
     modules = [ExaPowerIO],
     remotes = nothing,
     authors = "Archim Jhunjhunwala",
