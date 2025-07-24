@@ -37,18 +37,20 @@ end
     struct BranchData{T <: Real}
         fbus :: Int
         tbus :: Int
-        r :: T
-        x :: T
-        b :: T
+        br_r :: T
+        br_x :: T
+        b_fr :: T,
+        b_to :: T,
+        g_fr :: T,
+        g_to :: T,
         ratea ::T
         rateb :: T
         ratec :: T
-        ratio :: T
-        angle :: T
+        tap :: T
+        shift :: T
         status :: Int
         angmin :: T
         angmax :: T
-        ratea_sq :: T
         c1 :: T
         c2 :: T
         c3 :: T
@@ -64,18 +66,20 @@ fbus and tbus are indices into the Data.bus Vector, not bus_i values
 struct BranchData{T <: Real}
     fbus :: Int
     tbus :: Int
-    r :: T
-    x :: T
-    b :: T
+    br_r :: T
+    br_x :: T
+    b_fr :: T
+    b_to :: T
+    g_fr :: T
+    g_to :: T
     ratea ::T
     rateb :: T
     ratec :: T
-    ratio :: T
-    angle :: T
+    tap :: T
+    shift :: T
     status :: Int
     angmin :: T
     angmax :: T
-    ratea_sq :: T
     c1 :: T
     c2 :: T
     c3 :: T
@@ -84,7 +88,72 @@ struct BranchData{T <: Real}
     c6 :: T
     c7 :: T
     c8 :: T
+    function BranchData{T}(
+        fbus::Int,
+        tbus::Int,
+        br_r::T,
+        br_x::T,
+        b_fr::T,
+        b_to::T,
+        g_fr::T,
+        g_to::T,
+        ratea::T,
+        rateb::T,
+        ratec::T,
+        tap::T,
+        shift::T,
+        status::Int,
+        angmin::T,
+        angmax::T,
+    ) where {T<:Real}
+        x = br_r + im * br_x
+        xi = inv(x)
+        y = ifelse(isfinite(xi), xi, zero(xi))
+        g = real(y)
+        b = imag(y)
+        if isapprox(tap, T(0.0))
+            tap = T(1.0)
+        end
+        tr = tap * cos(shift)
+        ti = tap * sin(shift)
+        ttm = tr^2 + ti^2
+        c1 = (-g * tr - b * ti) / ttm
+        c2 = (-b * tr + g * ti) / ttm
+        c3 = (-g * tr + b * ti) / ttm
+        c4 = (-b * tr - g * ti) / ttm
+        c5 = (g + g_fr) / ttm
+        c6 = (b + b_fr) / ttm
+        c7 = (g + g_to)
+        c8 = (b + b_to)
+        new{T}(
+            fbus,
+            tbus,
+            br_r,
+            br_x,
+            b_fr,
+            b_to,
+            g_fr,
+            g_to,
+            ratea,
+            rateb,
+            ratec,
+            tap,
+            shift,
+            status,
+            angmin,
+            angmax,
+            c1,
+            c2,
+            c3,
+            c4,
+            c5,
+            c6,
+            c7,
+            c8,
+        )
+    end
 end
+
 """
     struct StorageData{T <: Real}
         storage_bus :: T
@@ -370,57 +439,24 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                         ntuple(normalize_cost, 3)
                     )
                 elseif cur_key == "branch"
-                    ratea_i = items[col_inds["rateA"]] / baseMVA
-                    r = items[col_inds["r"]]
-                    xraw = items[col_inds["x"]]
-                    braw = items[col_inds["b"]]
-                    x = r + im * xraw
-                    xi = inv(x)
-                    y = ifelse(isfinite(xi), xi, zero(xi))
-                    g = real(y)
-                    b = imag(y)
-                    # tap / shift take default vals (1, 0 respectively) in pglib
-                    ## tr = branch.tap .* cos.(branch.shift)
-                    ## ti = branch.tap .* sin.(branch.shift)
-                    ## ttm = tr^2 + ti^2
-                    ## g_fr = branch["g_fr"]
-                    ## b_fr = branch["b_fr"]
-                    ## g_to = branch["g_to"]
-                    ## b_to = branch["b_to"]
-                    ## branch.c1 = (-g * tr - b * ti) / ttm
-                    ## branch.c2 = (-b * tr + g * ti) / ttm
-                    ## branch.c3 = (-g * tr + b * ti) / ttm
-                    ## branch.c4 = (-b * tr - g * ti) / ttm
-                    ## branch.c5 = (g + g_fr) / ttm
-                    ## branch.c6 = (b + b_fr) / ttm
-                    ## branch.c7 = (g + g_to)
-                    ## branch.c8 = (b + b_to)
-                    # g_fr, g_to, b_fr, b_to are all not in pglib
-                    b_fr :: T = braw / T(2.0)
-                    b_to :: T = b_fr
-                    push!(branch, BranchData(
+                    br_b = items[haskey(col_inds, "b") ? col_inds["b"] : col_inds["br_b"]]
+                    push!(branch, BranchData{T}(
                         bus_map[round(Int, items[col_inds["fbus"]])],
                         bus_map[round(Int, items[col_inds["tbus"]])],
-                        r,
-                        xraw,
-                        braw,
-                        ratea_i,
+                        items[haskey(col_inds, "r") ? col_inds["r"] : col_inds["br_r"]],
+                        items[haskey(col_inds, "x") ? col_inds["x"] : col_inds["br_x"]],
+                        haskey(col_inds, "b_fr") ? items[col_inds["b_fr"]] : br_b / T(2.0),
+                        haskey(col_inds, "b_to") ? items[col_inds["b_to"]] : br_b / T(2.0),
+                        haskey(col_inds, "g_fr") ? items[col_inds["g_fr"]] : T(0.0),
+                        haskey(col_inds, "g_to") ? items[col_inds["g_to"]] : T(0.0),
+                        items[col_inds["rateA"]] / baseMVA,
                         items[col_inds["rateB"]] / baseMVA,
                         items[col_inds["rateC"]] / baseMVA,
-                        items[col_inds["ratio"]],
-                        items[col_inds["angle"]],
+                        items[haskey(col_inds, "tap") ? col_inds["tap"] : col_inds["ratio"]],
+                        (items[haskey(col_inds, "shift") ? col_inds["shift"] : col_inds["angle"]]) / T(180.0) * T(pi),
                         round(Int, items[col_inds["status"]]),
                         items[col_inds["angmin"]] / T(180.0) * T(pi),
                         items[col_inds["angmax"]] / T(180.0) * T(pi),
-                        ratea_i ^ 2,
-                        -g,
-                        -b,
-                        -g,
-                        -b,
-                        g,
-                        b + b_fr,
-                        g,
-                        b + b_to
                     ))
                 elseif cur_key == "storage"
                     push!(storage, StorageData(

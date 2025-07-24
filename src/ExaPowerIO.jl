@@ -25,11 +25,10 @@ The result will be cached to data_dir, which will be created if it does not exis
 """
 function parse_pglib(
     ::Type{T},
-    dataset_query :: String,
-    datadir :: String;
+    dataset_query :: String;
+    datadir=nothing,
     out_type=Data{T}
 ) :: Union{Data{T}, NamedTuple} where T <: Real
-    mkpath(datadir)
     pglib_matches = PGLib.find_pglib_case(dataset_query)
     dataset = if length(pglib_matches) == 0
         throw(error("No matches found for pglib dataset: $dataset_query"))

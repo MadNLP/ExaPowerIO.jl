@@ -1,10 +1,7 @@
 using ExaPowerIO, Test, PowerModels, PGLib
 
-PowerModels.silence()
-ExaPowerIO.silence()
-
 CASES = [
-    # (Float64, "pglib_opf_case1803_snem.m"),
+    (Float64, "pglib_opf_case1803_snem.m"),
     (Float64, "pglib_opf_case118_ieee.m"),
     (Float64, "pglib_opf_case1888_rte.m"),
     (Float64, "pglib_opf_case13659_pegase.m"),
@@ -72,13 +69,16 @@ CASES = [
     (Float64, "pglib_opf_case9591_goc.m"),
 ]
 
+PowerModels.silence()
+ExaPowerIO.silence()
+
 @testset "ExaPowerIO parsing tests" begin
     datadir = "../data/"
     for (type, dataset) in CASES
         path = joinpath(PGLib.PGLib_opf, dataset)
         @info "Testing with repr: $type, dataset: $dataset"
         @info path
-        pp_output = ExaPowerIO.parse_pglib(type, dataset, datadir; out_type=NamedTuple)
+        pp_output = ExaPowerIO.parse_pglib(type, dataset; out_type=NamedTuple)
         pm_output = PowerModels.parse_file(path)
         PowerModels.standardize_cost_terms!(pm_output, order = 2)
         PowerModels.calc_thermal_limits!(pm_output)
@@ -124,25 +124,47 @@ CASES = [
         end
         for (i, pp_branch) in enumerate(pp_output.branch)
             pm_branch = pm_output["branch"][string(i)]
+            pp_tbus = pp_output.bus[pp_branch.tbus].bus_i
+            pp_fbus = pp_output.bus[pp_branch.fbus].bus_i
+            if pm_branch["f_bus"] == pp_tbus && pm_branch["t_bus"] == pp_fbus
+                pp_branch = BranchData{type}(
+                    pp_branch.tbus,
+                    pp_branch.fbus,
+                    pp_branch.br_r * pp_branch.tap^2,
+                    pp_branch.br_x * pp_branch.tap^2,
+                    pp_branch.b_to / pp_branch.tap^2,
+                    pp_branch.b_fr * pp_branch.tap^2,
+                    pp_branch.g_to / pp_branch.tap^2,
+                    pp_branch.g_fr * pp_branch.tap^2,
+                    pp_branch.ratea,
+                    pp_branch.rateb,
+                    pp_branch.ratec,
+                    1 / pp_branch.tap,
+                    -pp_branch.shift,
+                    pp_branch.status,
+                    -pp_branch.angmax,
+                    -pp_branch.angmin,
+                )
+                pp_tbus = pp_output.bus[pp_branch.tbus].bus_i
+                pp_fbus = pp_output.bus[pp_branch.fbus].bus_i
+            end
             @test isapprox(pp_branch.ratea, pm_branch["rate_a"])
             @test isapprox(pp_branch.rateb, pm_branch["rate_b"])
             @test isapprox(pp_branch.ratec, pm_branch["rate_c"])
             @test isapprox(pp_branch.angmax, pm_branch["angmax"])
             @test isapprox(pp_branch.angmin, pm_branch["angmin"])
-            @test isapprox(pp_branch.r, pm_branch["br_r"])
-            @test isapprox(pp_branch.x, pm_branch["br_x"])
-            @test isapprox(pp_branch.b, pm_branch["b_to"] + pm_branch["b_fr"])
+            @test isapprox(pp_branch.br_r, pm_branch["br_r"])
+            @test isapprox(pp_branch.br_x, pm_branch["br_x"])
+            @test isapprox(pp_branch.b_fr, pm_branch["b_fr"])
+            @test isapprox(pp_branch.b_to, pm_branch["b_to"])
+            @test isapprox(pp_branch.g_fr, pm_branch["g_fr"])
+            @test isapprox(pp_branch.g_to, pm_branch["g_to"])
+            @test isapprox(pp_branch.tap, pm_branch["tap"])
+            @test isapprox(pp_branch.shift, pm_branch["shift"])
 
             @test pp_branch.status == pm_branch["br_status"]
-            pp_tbus = pp_output.bus[pp_branch.tbus].bus_i
-            pp_fbus = pp_output.bus[pp_branch.fbus].bus_i
-            # PowerModels.jl sometimes swaps fbus and tbus
-            if pp_tbus == pm_branch["t_bus"]
-                @test pp_fbus == pm_branch["f_bus"]
-            else
-                @test pp_tbus == pm_branch["f_bus"]
-                @test pp_fbus == pm_branch["t_bus"]
-            end
+            @test pp_tbus == pm_branch["t_bus"]
+            @test pp_fbus == pm_branch["f_bus"]
         end
         for (i, pp_storage) in enumerate(pp_output.storage)
             pm_storage = pm_output["storage"][string(i)]
