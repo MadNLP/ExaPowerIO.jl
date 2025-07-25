@@ -296,22 +296,24 @@ end
 const MATPOWER_ARRAY_KEYS :: Vector{String} = ["bus", "gen", "branch", "storage", "gencost"]
 const MATPOWER_KEYS :: Vector{String} = [["version", "baseMVA", "areas"]; MATPOWER_ARRAY_KEYS]
 const INIT_WORDS_LEN = 25
-const GITHUB_ISSUES = "https://github.com/MadNLP/ExaPowerIO.jl/issues."
+const PRINTABLE_ASCII = 96
+const ASCII_OFFSET = 31
+is_end(c::Char) = isspace(c) || c in "=;[]"
+const ENDS = ntuple(i -> is_end(Char(i + ASCII_OFFSET)), PRINTABLE_ASCII)
 
 struct WordedString
     s :: SubString{String}
     len :: Int
-    extra_ends :: String
-    WordedString(s::SubString{String}, extra_ends::String) = new(s, length(s), extra_ends)
+    @inline WordedString(s::SubString{String}) = new(s, length(s))
 end
 
-function Base.iterate(worded_string :: WordedString)
+@inline function Base.iterate(worded_string :: WordedString)
     iterate(worded_string, 1)
 end
 
 @views function Base.iterate(worded_string :: WordedString, start :: Int) :: Union{Nothing, Tuple{SubString{String}, Int}}
     len = worded_string.len - start + 1
-    if len <= 0
+    if len <= 0 || worded_string.s[start] == '%'
         return nothing
     end
     s = worded_string.s[start:end]
@@ -322,30 +324,16 @@ end
     if left > len
         return nothing
     end
-    should_end = c -> isspace(c) || contains(worded_string.extra_ends, c)
     right = left
-    while right <= len && !should_end(s[right])
+    should_end = c -> c > ASCII_OFFSET && ENDS[c - ASCII_OFFSET]
+    while right <= len && !should_end(Int8(s[right]))
         right += 1
     end
     # right is non-inclusive
-    if should_end(s[left])
+    if should_end(Int8(s[left]))
         right += 1
     end
     (s[left:right-1], right + start - 1)
-end
-
-function Base.length(worded_string :: WordedString)
-    is_end = c -> isspace(c) || contains(worded_string.extra_ends, c)
-    len = 0
-    last_was_end = true
-    for c in worded_string.s
-        cur_is_end = is_end(c)
-        if (last_was_end && !cur_is_end) || cur_is_end
-            len += 1
-        end
-        last_was_end = cur_is_end
-    end
-    len
 end
 
 function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
@@ -374,8 +362,8 @@ function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V
             in_array = false
         elseif in_array && ';' in line
             row_num += 1
-        elseif length(line) > length("mpc.")
-            cur_key = iterate(WordedString(line, ""))[1][length("mpc.")+1:end]
+        elseif length(line) > length("mpc.") && line[1:4] == "mpc."
+            cur_key = iterate(WordedString(line))[1][length("mpc.")+1:end]
             if cur_key in MATPOWER_ARRAY_KEYS
                 in_array = true
             end
@@ -389,15 +377,22 @@ function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V
     baseMVA :: T = T(0.0)
     bus_map :: Dict{Int, Int} = Dict()
     words :: Vector{SubString{String}} = Vector(undef, INIT_WORDS_LEN)
-    items = Vector(undef, INIT_WORDS_LEN)
     reallocated = false
+    is_end = c -> isspace(c) || c in "=;[]%"
+    ends = ntuple(i -> is_end(Char(i + ASCII_OFFSET)), PRINTABLE_ASCII)
     while true
         if length(line) != 0 && line[1] == '%'
             line = lines[line_ind += 1] :: SubString{String}
             continue
         end
         num_words = 0
-        for (i, word) in enumerate(WordedString(line, "=;[]%"))
+        iter_state = 1
+        # words = ntuple(i -> begin
+        #                    @info iter_state
+        #                    (word, start) = iterate(ws)
+        #                end, INIT_WORDS_LEN)
+        num_words = 0
+        for (i, word) in enumerate(WordedString(line))
             if word == "%"
                 break
             end
@@ -417,50 +412,42 @@ function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V
         end
 
         if in_array && length(line) != 0 && line[1] != '%'
-            squares = findall(s -> s == "]", words[1:num_words])
-            first_sq = length(squares) == 0 ? typemax(Int64) : squares[1]
-            first_semi = length(squares) == 0 ? typemax(Int64) : squares[1]
-            num_items = min(min(first_semi - 1, first_sq - 1), num_words - 1)
-            for i in 1:num_items
-                items[i] = parse(T, words[i]) :: T
-            end
-
-            if num_items == 0 && num_words >= 2 && words[num_words-1] == "]" && words[num_words] == ";"
+            if num_words >= 2 && words[num_words-1] == "]" && words[num_words] == ";"
                 if cur_key == "bus"
                     bus_map = Dict(bus.bus_i => i for (i, bus) in enumerate(bus))
                 end
                 in_array = false
             elseif num_words != 0 && words[num_words] != ";"
                 error("Invalid matpower file. Line $(line_ind) array doesn't end with ; or ];")
-            elseif length(items) != 0
+            elseif length(words) != 0
                 if cur_key == "bus"
                     bus[row_num] = BusData(
-                        round(Int, items[1]),
-                        round(Int, items[2]),
-                        items[3] / baseMVA,
-                        items[4] / baseMVA,
-                        items[5],
-                        items[6],
-                        round(Int, items[7]),
-                        items[8],
-                        items[9],
-                        items[10],
-                        round(Int, items[11]),
-                        items[12],
-                        items[13],
+                        parse(Int, words[1]),
+                        parse(Int, words[2]),
+                        parse(T, words[3]) / baseMVA,
+                        parse(T, words[4]) / baseMVA,
+                        parse(T, words[5]),
+                        parse(T, words[6]),
+                        parse(Int, words[7]),
+                        parse(T, words[8]),
+                        parse(T, words[9]),
+                        parse(T, words[10]),
+                        parse(Int, words[11]),
+                        parse(T, words[12]),
+                        parse(T, words[13]),
                     )
                 elseif cur_key == "gen"
                     gen[row_num] = GenData(
-                        bus_map[round(Int, items[1])],
-                        items[2] / baseMVA,
-                        items[3] / baseMVA,
-                        items[4] / baseMVA,
-                        items[5] / baseMVA,
-                        items[6],
-                        items[7],
-                        round(Int, items[8]),
-                        items[9] / baseMVA,
-                        items[10] / baseMVA,
+                        bus_map[parse(Int, words[1])],
+                        parse(T, words[2]) / baseMVA,
+                        parse(T, words[3]) / baseMVA,
+                        parse(T, words[4]) / baseMVA,
+                        parse(T, words[5]) / baseMVA,
+                        parse(T, words[6]),
+                        parse(T, words[7]),
+                        parse(Int, words[8]),
+                        parse(T, words[9]) / baseMVA,
+                        parse(T, words[10]) / baseMVA,
                         row_num,
                         false,
                         T(0),
@@ -469,16 +456,16 @@ function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V
                         (T(0), T(0), T(0)),
                     )
                 elseif cur_key == "gencost"
-                    model_poly = items[1] == 2
-                    n = round(Int, items[4])
-                    normalize_cost = let baseMVA = baseMVA, items = items
+                    model_poly = parse(Int, words[1]) == 2
+                    n = parse(Int, words[4])
+                    normalize_cost = let baseMVA = baseMVA
                         function normalize_cost(i :: Int)
-                            c = items[4 + i]
+                            c = parse(T, words[4 + i])
                             return model_poly ? baseMVA ^ (n-i) * c : c
                         end
                     end
                     gen[row_num] = GenData(
-                        round(Int, gen[row_num].bus),
+                        gen[row_num].bus,
                         gen[row_num].pg,
                         gen[row_num].qg,
                         gen[row_num].qmax,
@@ -490,49 +477,50 @@ function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V
                         gen[row_num].pmin,
                         row_num,
                         model_poly,
-                        items[2],
-                        items[3],
+                        parse(T, words[2]),
+                        parse(T, words[3]),
                         n,
                         ntuple(normalize_cost, 3)
                     )
                 elseif cur_key == "branch"
+                    br_b = parse(T, words[5])
                     branch[row_num] = BranchData{T}(
-                        bus_map[round(Int, items[1])],
-                        bus_map[round(Int, items[2])],
-                        items[3],
-                        items[4],
-                        items[5] / T(2.0),
-                        items[5] / T(2.0),
+                        bus_map[parse(Int, words[1])],
+                        bus_map[parse(Int, words[2])],
+                        parse(T, words[3]),
+                        parse(T, words[4]),
+                        br_b / T(2.0),
+                        br_b / T(2.0),
                         T(0.0),
                         T(0.0),
-                        items[6] / baseMVA,
-                        items[7] / baseMVA,
-                        items[8] / baseMVA,
-                        items[9],
-                        (items[10]) / T(180.0) * T(pi),
-                        round(Int, items[11]),
-                        items[12] / T(180.0) * T(pi),
-                        items[13] / T(180.0) * T(pi),
+                        parse(T, words[6]) / baseMVA,
+                        parse(T, words[7]) / baseMVA,
+                        parse(T, words[8]) / baseMVA,
+                        parse(T, words[9]),
+                        (parse(T, words[10])) / T(180.0) * T(pi),
+                        parse(Int, words[11]),
+                        parse(T, words[12]) / T(180.0) * T(pi),
+                        parse(T, words[13]) / T(180.0) * T(pi),
                     )
                 elseif cur_key == "storage"
                     storage[row_num] = StorageData(
-                        items[1],
-                        items[2],
-                        items[3],
-                        items[4],
-                        items[5],
-                        items[6],
-                        items[7],
-                        items[8],
-                        items[9],
-                        items[10],
-                        items[11],
-                        items[12],
-                        items[13],
-                        items[14],
-                        items[15],
-                        items[16],
-                        items[17],
+                        parse(T, words[1]),
+                        parse(T, words[2]),
+                        parse(T, words[3]),
+                        parse(T, words[4]),
+                        parse(T, words[5]),
+                        parse(T, words[6]),
+                        parse(T, words[7]),
+                        parse(T, words[8]),
+                        parse(T, words[9]),
+                        parse(T, words[10]),
+                        parse(T, words[11]),
+                        parse(T, words[12]),
+                        parse(T, words[13]),
+                        parse(T, words[14]),
+                        parse(T, words[15]),
+                        parse(T, words[16]),
+                        parse(T, words[17]),
                     )
                 end
                 row_num += 1
