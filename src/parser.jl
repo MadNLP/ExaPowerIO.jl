@@ -315,23 +315,16 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
     lines :: Vector{SubString{String}} = split(fstring, "\n")
     in_array = false
     cur_key :: String = ""
-    version = ""
-    baseMVA :: T = T(0.0)
     bus :: Vector{BusData{T}} = []
     gen :: Vector{GenData{T}} = []
     branch :: Vector{BranchData{T}} = []
     storage :: Vector{StorageData{T}} = []
-    line_ind = 1
-    line :: SubString{String} = lines[line_ind]
-    type = Missing
-    comment = EMPTY_SUBSTRING
-    col_inds :: Dict{String, Int} = Dict()
+
+    row_num = 0
     words :: Vector{SubString{String}} = [EMPTY_SUBSTRING for _ in 1:INIT_WORDS_LEN]
     items = [T(0.0) for _ in 1:INIT_WORDS_LEN]
     reallocated = false
     bus_map :: Dict{Int, Int} = Dict()
-
-    row_num = 0
     @views for line in lines
         if in_array && length(line) >= 1 && line[1] == ']'
             if cur_key == "bus"
@@ -356,6 +349,11 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
     end
 
     row_num = 1
+    line_ind = 1
+    line :: SubString{String} = lines[line_ind]
+    version = ""
+    baseMVA :: T = T(0.0)
+
     while true
         if length(line) != 0 && line[1] == '%'
             comment = line
@@ -401,32 +399,32 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
             elseif length(items) != 0
                 if cur_key == "bus"
                     bus[row_num] = BusData(
-                        round(Int, items[col_inds["bus_i"]]),
-                        round(Int, items[col_inds["type"]]),
-                        items[col_inds["Pd"]] / baseMVA,
-                        items[col_inds["Qd"]] / baseMVA,
-                        items[col_inds["Gs"]],
-                        items[col_inds["Bs"]],
-                        round(Int, items[col_inds["area"]]),
-                        items[col_inds["Vm"]],
-                        items[col_inds["Va"]],
-                        items[col_inds["baseKV"]],
-                        round(Int, items[col_inds["zone"]]),
-                        items[col_inds["Vmax"]],
-                        items[col_inds["Vmin"]],
+                        round(Int, items[1]),
+                        round(Int, items[2]),
+                        items[3] / baseMVA,
+                        items[4] / baseMVA,
+                        items[5],
+                        items[6],
+                        round(Int, items[7]),
+                        items[8],
+                        items[9],
+                        items[10],
+                        round(Int, items[11]),
+                        items[12],
+                        items[12],
                     )
                 elseif cur_key == "gen"
                     gen[row_num] = GenData(
-                        bus_map[round(Int, items[col_inds["bus"]])],
-                        items[col_inds["Pg"]] / baseMVA,
-                        items[col_inds["Qg"]] / baseMVA,
-                        items[col_inds["Qmax"]] / baseMVA,
-                        items[col_inds["Qmin"]] / baseMVA,
-                        items[col_inds["Vg"]],
-                        items[col_inds["mBase"]],
-                        round(Int, items[col_inds["status"]]),
-                        items[col_inds["Pmax"]] / baseMVA,
-                        items[col_inds["Pmin"]] / baseMVA,
+                        bus_map[round(Int, items[1])],
+                        items[2] / baseMVA,
+                        items[3] / baseMVA,
+                        items[4] / baseMVA,
+                        items[5] / baseMVA,
+                        items[6],
+                        items[7],
+                        round(Int, items[8]),
+                        items[9] / baseMVA,
+                        items[10] / baseMVA,
                         row_num,
                         false,
                         T(0),
@@ -435,13 +433,11 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
                         (T(0), T(0), T(0)),
                     )
                 elseif cur_key == "gencost"
-                    first_cost_col = col_inds["n"] + 1
-                    # pglib puts the column name as "2" for some reason, so we cant use col_inds
                     model_poly = items[1] == 2
-                    n = round(Int, items[col_inds["n"]])
+                    n = round(Int, items[4])
                     normalize_cost = let baseMVA = baseMVA, items = items
                         function normalize_cost(i :: Int)
-                            c = items[first_cost_col+i-1]
+                            c = items[4 + i]
                             return model_poly ? baseMVA ^ (n-i) * c : c
                         end
                     end
@@ -458,61 +454,54 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
                         gen[row_num].pmin,
                         row_num,
                         model_poly,
-                        items[col_inds["startup"]],
-                        items[col_inds["shutdown"]],
+                        items[2],
+                        items[3],
                         n,
                         ntuple(normalize_cost, 3)
                     )
                 elseif cur_key == "branch"
-                    br_b = items[haskey(col_inds, "b") ? col_inds["b"] : col_inds["br_b"]]
                     branch[row_num] = BranchData{T}(
-                        bus_map[round(Int, items[col_inds["fbus"]])],
-                        bus_map[round(Int, items[col_inds["tbus"]])],
-                        items[haskey(col_inds, "r") ? col_inds["r"] : col_inds["br_r"]],
-                        items[haskey(col_inds, "x") ? col_inds["x"] : col_inds["br_x"]],
-                        haskey(col_inds, "b_fr") ? items[col_inds["b_fr"]] : br_b / T(2.0),
-                        haskey(col_inds, "b_to") ? items[col_inds["b_to"]] : br_b / T(2.0),
-                        haskey(col_inds, "g_fr") ? items[col_inds["g_fr"]] : T(0.0),
-                        haskey(col_inds, "g_to") ? items[col_inds["g_to"]] : T(0.0),
-                        items[col_inds["rateA"]] / baseMVA,
-                        items[col_inds["rateB"]] / baseMVA,
-                        items[col_inds["rateC"]] / baseMVA,
-                        items[haskey(col_inds, "tap") ? col_inds["tap"] : col_inds["ratio"]],
-                        (items[haskey(col_inds, "shift") ? col_inds["shift"] : col_inds["angle"]]) / T(180.0) * T(pi),
-                        round(Int, items[col_inds["status"]]),
-                        items[col_inds["angmin"]] / T(180.0) * T(pi),
-                        items[col_inds["angmax"]] / T(180.0) * T(pi),
+                        bus_map[round(Int, items[1])],
+                        bus_map[round(Int, items[2])],
+                        items[3],
+                        items[4],
+                        items[5] / T(2.0),
+                        items[5] / T(2.0),
+                        T(0.0),
+                        T(0.0),
+                        items[6] / baseMVA,
+                        items[7] / baseMVA,
+                        items[8] / baseMVA,
+                        items[9],
+                        (items[10]) / T(180.0) * T(pi),
+                        round(Int, items[11]),
+                        items[12] / T(180.0) * T(pi),
+                        items[13] / T(180.0) * T(pi),
                     )
                 elseif cur_key == "storage"
                     storage[row_num] = StorageData(
-                        items[col_inds["storage_bus"]],
-                        items[col_inds["ps"]],
-                        items[col_inds["qs"]],
-                        items[col_inds["energy"]],
-                        items[col_inds["energy_rating"]],
-                        items[col_inds["charge_rating"]],
-                        items[col_inds["discharge_rating"]],
-                        items[col_inds["charge_efficiency"]],
-                        items[col_inds["discharge_efficiency"]],
-                        items[col_inds["thermal_rating"]],
-                        items[col_inds["qmin"]],
-                        items[col_inds["qmax"]],
-                        items[col_inds["r"]],
-                        items[col_inds["x"]],
-                        items[col_inds["p_loss"]],
-                        items[col_inds["q_loss"]],
-                        items[col_inds["status"]],
+                        items[1],
+                        items[2],
+                        items[3],
+                        items[4],
+                        items[5],
+                        items[6],
+                        items[7],
+                        items[8],
+                        items[9],
+                        items[10],
+                        items[11],
+                        items[12],
+                        items[13],
+                        items[14],
+                        items[15],
+                        items[16],
+                        items[17],
                     )
                 end
                 row_num += 1
             end
         elseif length(line) != 0 && line[1] != '%' && words[1] != "function"
-            col_inds = Dict(column => i for (i, column) in
-                            enumerate(Base.Iterators.drop(WordedString(comment, ""), 1)))
-            comment = EMPTY_SUBSTRING
-            cur_key = ""
-            type = Any
-
             for key in MATPOWER_KEYS
                 full_name = "mpc.$key"
                 idxs = findall(s -> s == full_name, words) 
