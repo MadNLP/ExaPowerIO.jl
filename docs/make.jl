@@ -17,7 +17,6 @@ makedocs(;
     remotes = nothing,
     authors = "Archim Jhunjhunwala",
     format = Documenter.HTML(
-        assets = ["assets/citations.css"],
         prettyurls = true,
         sidebar_sitename = true,
         collapselevel = 1,

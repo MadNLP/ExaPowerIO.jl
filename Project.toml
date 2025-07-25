@@ -4,11 +4,9 @@ authors = ["Archim Jhunjhunwala <archimj@mit.edu>"]
 version = "0.1.0"
 
 [deps]
-JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 PGLib = "07a8691f-3d11-4330-951b-3c50f98338be"
 
 [compat]
-JLD2 = "~0.5"
 PGLib = "0.2.1"
 PowerModels = "~0.21"
 Test = "~1.11"

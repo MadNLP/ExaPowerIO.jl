@@ -1,6 +1,7 @@
 using ExaPowerIO, Test, PowerModels, PGLib
 
 CASES = [
+    (Float64, "pglib_opf_case3_lmbd.m"),
     (Float64, "pglib_opf_case1803_snem.m"),
     (Float64, "pglib_opf_case118_ieee.m"),
     (Float64, "pglib_opf_case1888_rte.m"),
@@ -42,7 +43,6 @@ CASES = [
     (Float64, "pglib_opf_case3375wp_k.m"),
     (Float64, "pglib_opf_case3970_goc.m"),
     (Float64, "pglib_opf_case39_epri.m"),
-    (Float64, "pglib_opf_case3_lmbd.m"),
     (Float64, "pglib_opf_case4020_goc.m"),
     (Float64, "pglib_opf_case4601_goc.m"),
     (Float64, "pglib_opf_case4619_goc.m"),
@@ -70,7 +70,6 @@ CASES = [
 ]
 
 PowerModels.silence()
-ExaPowerIO.silence()
 
 @testset "ExaPowerIO parsing tests" begin
     datadir = "../data/"

@@ -61,7 +61,7 @@ end
         c8 :: T
     end
 
-fbus and tbus are indices into the Data.bus Vector, not bus_i values
+fbus and tbus are indices into the PowerData.bus Vector, not bus_i values
 """
 struct BranchData{T <: Real}
     fbus :: Int
@@ -214,7 +214,7 @@ end
         c :: NTuple{3, T}
     end
 
-bus is an index into the Data.bus Vector, not bus_i values
+bus is an index into the PowerData.bus Vector, not bus_i values
 """
 struct GenData{T <: Real}
     bus :: Int
@@ -248,7 +248,7 @@ end
 all corespond to members of the mpc object created by a matpower file.
 Their fields correspond exactly with the columns of the relevant ```mpc``` member.
 """
-struct Data{T <: Real}
+struct PowerData{T <: Real}
     version :: String
     baseMVA :: T
     bus :: Vector{BusData{T}}
@@ -258,7 +258,8 @@ struct Data{T <: Real}
 end
 
 const EMPTY_SUBSTRING = SubString("", 1, 0)
-const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "bus", "gen", "gencost", "branch", "storage", "areas"]
+const MATPOWER_ARRAY_KEYS :: Vector{String} = ["bus", "gen", "branch", "storage", "gencost"]
+const MATPOWER_KEYS :: Vector{String} = [["version", "baseMVA", "areas"]; MATPOWER_ARRAY_KEYS]
 const INIT_WORDS_LEN = 25
 const GITHUB_ISSUES = "https://github.com/MadNLP/ExaPowerIO.jl/issues."
 
@@ -309,7 +310,7 @@ function Base.length(worded_string :: WordedString)
     len
 end
 
-function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
+function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: Real
     fstring = read(open(fname), String)
     lines :: Vector{SubString{String}} = split(fstring, "\n")
     in_array = false
@@ -323,7 +324,6 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
     line_ind = 1
     line :: SubString{String} = lines[line_ind]
     type = Missing
-    row_num = 1
     comment = EMPTY_SUBSTRING
     col_inds :: Dict{String, Int} = Dict()
     words :: Vector{SubString{String}} = [EMPTY_SUBSTRING for _ in 1:INIT_WORDS_LEN]
@@ -331,6 +331,31 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
     reallocated = false
     bus_map :: Dict{Int, Int} = Dict()
 
+    row_num = 0
+    @views for line in lines
+        if in_array && length(line) >= 1 && line[1] == ']'
+            if cur_key == "bus"
+                bus = Vector(undef, row_num)
+            elseif cur_key == "gen"
+                gen = Vector(undef, row_num)
+            elseif cur_key == "branch"
+                branch = Vector(undef, row_num)
+            elseif cur_key == "storage"
+                storage = Vector(undef, row_num)
+            end
+            row_num = 0
+            in_array = false
+        elseif in_array && ';' in line
+            row_num += 1
+        elseif length(line) > length("mpc.")
+            cur_key = iterate(WordedString(line, ""))[1][length("mpc.")+1:end]
+            if cur_key in MATPOWER_ARRAY_KEYS
+                in_array = true
+            end
+        end
+    end
+
+    row_num = 1
     while true
         if length(line) != 0 && line[1] == '%'
             comment = line
@@ -375,7 +400,7 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                 error("Invalid matpower file. Line $(line_ind) array doesn't end with ; or ];")
             elseif length(items) != 0
                 if cur_key == "bus"
-                    push!(bus, BusData(
+                    bus[row_num] = BusData(
                         round(Int, items[col_inds["bus_i"]]),
                         round(Int, items[col_inds["type"]]),
                         items[col_inds["Pd"]] / baseMVA,
@@ -389,9 +414,9 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                         round(Int, items[col_inds["zone"]]),
                         items[col_inds["Vmax"]],
                         items[col_inds["Vmin"]],
-                    ))
+                    )
                 elseif cur_key == "gen"
-                    push!(gen, GenData(
+                    gen[row_num] = GenData(
                         bus_map[round(Int, items[col_inds["bus"]])],
                         items[col_inds["Pg"]] / baseMVA,
                         items[col_inds["Qg"]] / baseMVA,
@@ -408,7 +433,7 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                         T(0),
                         0,
                         (T(0), T(0), T(0)),
-                    ))
+                    )
                 elseif cur_key == "gencost"
                     first_cost_col = col_inds["n"] + 1
                     # pglib puts the column name as "2" for some reason, so we cant use col_inds
@@ -440,7 +465,7 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                     )
                 elseif cur_key == "branch"
                     br_b = items[haskey(col_inds, "b") ? col_inds["b"] : col_inds["br_b"]]
-                    push!(branch, BranchData{T}(
+                    branch[row_num] = BranchData{T}(
                         bus_map[round(Int, items[col_inds["fbus"]])],
                         bus_map[round(Int, items[col_inds["tbus"]])],
                         items[haskey(col_inds, "r") ? col_inds["r"] : col_inds["br_r"]],
@@ -457,9 +482,9 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                         round(Int, items[col_inds["status"]]),
                         items[col_inds["angmin"]] / T(180.0) * T(pi),
                         items[col_inds["angmax"]] / T(180.0) * T(pi),
-                    ))
+                    )
                 elseif cur_key == "storage"
-                    push!(storage, StorageData(
+                    storage[row_num] = StorageData(
                         items[col_inds["storage_bus"]],
                         items[col_inds["ps"]],
                         items[col_inds["qs"]],
@@ -477,7 +502,7 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
                         items[col_inds["p_loss"]],
                         items[col_inds["q_loss"]],
                         items[col_inds["status"]],
-                    ))
+                    )
                 end
                 row_num += 1
             end
@@ -560,10 +585,10 @@ function parse_matpower(::Type{T}, fname :: String) :: Data{T} where T <: Real
         end
     end
 
-    return Data(version, baseMVA, bus, gen, branch, storage)
+    return PowerData(version, baseMVA, bus, gen, branch, storage)
 end
 
-function standardize_cost_terms!(data :: Data{T}, order) where T <: Real
+function standardize_cost_terms!(data :: PowerData{T}, order) where T <: Real
     gen_order = 1
     for (_, gen) in enumerate(data.gen)
         max_ind = 1
@@ -607,7 +632,7 @@ function standardize_cost_terms!(data :: Data{T}, order) where T <: Real
     end
 end
 
-function calc_thermal_limits!(data :: Data{T}) where T <: Real
+function calc_thermal_limits!(data :: PowerData{T}) where T <: Real
     for branch in filter(branch -> branch.ratea <= 0, data.branch)
         xi = inv(branch.r + im * branch.x)
         y_mag = abs.(ifelse(isfinite(xi), xi, zero(xi)))
@@ -623,7 +648,7 @@ function calc_thermal_limits!(data :: Data{T}) where T <: Real
     end
 end
 
-function process_ac_power_data(::Type{T}, filename) :: Data{T} where T <: Real
+function process_ac_power_data(::Type{T}, filename) :: PowerData{T} where T <: Real
     data = parse_matpower(T, filename)
     standardize_cost_terms!(data, 2)
     calc_thermal_limits!(data)
@@ -640,7 +665,7 @@ This is a general purpose function for converting structs to named tuples.
 It is used internally when ```out_type=NamedTuple``` is passed to ```parse_pglib``` or ```parse_file```,
 and is more expensive than the actual parsing in both cases.
 
-We export this function for those wishing to compare the performance of ```out_type=ExaPowerIO.Data``` with ```out_type=NamedTuple```,
+We export this function for those wishing to compare the performance of ```out_type=ExaPowerIO.PowerData``` with ```out_type=NamedTuple```,
 as well as benchmarking reasons.
 """
 function struct_to_nt(data :: T) :: NamedTuple where T

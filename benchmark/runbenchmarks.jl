@@ -28,39 +28,102 @@ function run_pm(dataset :: String)
 end
 
 datadir = "../data/"
-BENCH_CASES = [
-     (Float16, "pglib_opf_case10000_goc.m"),
-     (Float32, "pglib_opf_case10192_epigrids.m"),
-     (Float64, "pglib_opf_case20758_epigrids.m"),
+CASES = [
+    (Float64, "pglib_opf_case3_lmbd.m"),
+    (Float64, "pglib_opf_case1803_snem.m"),
+    (Float64, "pglib_opf_case118_ieee.m"),
+    (Float64, "pglib_opf_case1888_rte.m"),
+    (Float64, "pglib_opf_case13659_pegase.m"),
+    (Float64, "pglib_opf_case1354_pegase.m"),
+    (Float64, "pglib_opf_case10000_goc.m"),
+    (Float64, "pglib_opf_case10192_epigrids.m"),
+    (Float64, "pglib_opf_case10480_goc.m"),
+    (Float64, "pglib_opf_case14_ieee.m"),
+    (Float64, "pglib_opf_case162_ieee_dtc.m"),
+    (Float64, "pglib_opf_case179_goc.m"),
+    (Float64, "pglib_opf_case19402_goc.m"),
+    (Float64, "pglib_opf_case1951_rte.m"),
+    (Float64, "pglib_opf_case197_snem.m"),
+    (Float64, "pglib_opf_case2000_goc.m"),
+    (Float64, "pglib_opf_case200_activ.m"),
+    (Float64, "pglib_opf_case20758_epigrids.m"),
+    (Float64, "pglib_opf_case2312_goc.m"),
+    (Float64, "pglib_opf_case2383wp_k.m"),
+    (Float64, "pglib_opf_case240_pserc.m"),
+    (Float64, "pglib_opf_case24464_goc.m"),
+    (Float64, "pglib_opf_case24_ieee_rts.m"),
+    (Float64, "pglib_opf_case2736sp_k.m"),
+    (Float64, "pglib_opf_case2737sop_k.m"),
+    (Float64, "pglib_opf_case2742_goc.m"),
+    (Float64, "pglib_opf_case2746wop_k.m"),
+    (Float64, "pglib_opf_case2746wp_k.m"),
+    (Float64, "pglib_opf_case2848_rte.m"),
+    (Float64, "pglib_opf_case2853_sdet.m"),
+    (Float64, "pglib_opf_case2868_rte.m"),
+    (Float64, "pglib_opf_case2869_pegase.m"),
+    (Float64, "pglib_opf_case30000_goc.m"),
+    (Float64, "pglib_opf_case300_ieee.m"),
+    (Float64, "pglib_opf_case3012wp_k.m"),
+    (Float64, "pglib_opf_case3022_goc.m"),
+    (Float64, "pglib_opf_case30_as.m"),
+    (Float64, "pglib_opf_case30_ieee.m"),
+    (Float64, "pglib_opf_case3120sp_k.m"),
+    (Float64, "pglib_opf_case3375wp_k.m"),
+    (Float64, "pglib_opf_case3970_goc.m"),
+    (Float64, "pglib_opf_case39_epri.m"),
+    (Float64, "pglib_opf_case4020_goc.m"),
+    (Float64, "pglib_opf_case4601_goc.m"),
+    (Float64, "pglib_opf_case4619_goc.m"),
+    (Float64, "pglib_opf_case4661_sdet.m"),
+    (Float64, "pglib_opf_case4837_goc.m"),
+    (Float64, "pglib_opf_case4917_goc.m"),
+    (Float64, "pglib_opf_case500_goc.m"),
+    (Float64, "pglib_opf_case5658_epigrids.m"),
+    (Float64, "pglib_opf_case57_ieee.m"),
+    (Float64, "pglib_opf_case588_sdet.m"),
+    (Float64, "pglib_opf_case5_pjm.m"),
+    (Float64, "pglib_opf_case60_c.m"),
+    (Float64, "pglib_opf_case6468_rte.m"),
+    (Float64, "pglib_opf_case6470_rte.m"),
+    (Float64, "pglib_opf_case6495_rte.m"),
+    (Float64, "pglib_opf_case6515_rte.m"),
+    (Float64, "pglib_opf_case7336_epigrids.m"),
+    (Float64, "pglib_opf_case73_ieee_rts.m"),
+    (Float64, "pglib_opf_case78484_epigrids.m"),
+    (Float64, "pglib_opf_case793_goc.m"),
+    (Float64, "pglib_opf_case8387_pegase.m"),
+    (Float64, "pglib_opf_case89_pegase.m"),
+    (Float64, "pglib_opf_case9241_pegase.m"),
+    (Float64, "pglib_opf_case9591_goc.m"),
 ]
 
 function display_btimed(btimed :: NamedTuple)
     display(btimed[(:time, :bytes, :alloc, :gctime)])
 end
 
-for (type, dataset) in BENCH_CASES
+for (type, dataset) in CASES
     if INTERMEDIATE
         @info "ExaPowerIO.jl: parsing $dataset to structs"
-        parsed = @btimed ExaPowerIO.parse_pglib($type, $dataset, $datadir; out_type=ExaPowerIO.Data) samples=NUM_SAMPLES
+        parsed = @btimed ExaPowerIO.parse_pglib{$type}($dataset; out_type=ExaPowerIO.PowerData) samples=NUM_SAMPLES
         display_btimed(parsed)
         @info "ExaPowerIO.jl: converting $dataset struct to named tuple"
-        result = @btimed ExaPowerIO.struct_to_nt($(parsed.value))
-        display_btimed(result)
+        nt = @btimed ExaPowerIO.struct_to_nt($(parsed.value))
+        display_btimed(nt)
         @info "ExaPowerIO.jl: total"
         display((
-            time = result.time+parsed.time,
-            bytes = result.bytes+parsed.bytes,
-            alloc = result.alloc+parsed.alloc,
-            gctime = result.gctime+parsed.gctime
+            time = nt.time+parsed.time,
+            bytes = nt.bytes+parsed.bytes,
+            alloc = nt.alloc+parsed.alloc,
+            gctime = nt.gctime+parsed.gctime
         ))
     else
         @info "ExaPowerIO.jl " * dataset
-        result = @btimed ExaPowerIO.parse_pglib($type, $dataset, $datadir; out_type=NamedTuple) samples=NUM_SAMPLES
-        display_btimed(result)
+        nt = @btimed ExaPowerIO.parse_pglib{$type}($dataset; out_type=NamedTuple) samples=NUM_SAMPLES
+        display_btimed(nt)
     end
     if COMPARE
         @info "PowerModels.jl " * dataset
-        result = @btimed run_pm($dataset) samples=NUM_SAMPLES
-        display_btimed(result)
+        nt = @btimed run_pm($dataset) samples=NUM_SAMPLES
+        display_btimed(nt)
     end
 end

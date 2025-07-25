@@ -7,7 +7,7 @@ If you experience any of these, please open [Issues](https://github.com/MadNLP/E
 
 ### What does ExaPowerIO do?
 ExaPowerIO was created with the goal of being a low-scope IO package for working with the [Matpower File Format](https://matpower.app/manual/matpower/DataFileFormat.html).
-Currently, ExaPowerIO currently only supports input (parsing) operations. 
+Currently, ExaPowerIO only supports input (parsing) operations. 
 
 ### Usage
 If you are interested in trying ExaPowerIO, please see the Usage Documentation for information on using the functions / structs exported by ExaPowerIO.
