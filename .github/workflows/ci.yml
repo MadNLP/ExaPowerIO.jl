@@ -10,7 +10,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
         matrix:
-            os: [ubuntu-latest, windows-latest, macos-latest, self-hosted]
+            os: [ubuntu-latest, windows-latest, macos-latest]
             julia-version: '1.11'
     steps:
       - name: Checkout repository
@@ -34,6 +34,34 @@ jobs:
           path: ~/.julia/compiled
           key: compiled-${{ runner.os }}-${{ hashFiles('**/Project.toml') }}-${{ hashFiles('**/Manifest.toml') }}
           restore-keys: compiled-${{ runner.os }}-
+
+      - name: Install package dependencies
+        run: |
+          julia --project=@. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Run tests
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.test()'
+
+  test-self-hosted:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache Julia artifacts
+        uses: actions/cache@v3
+        with:
+          path: ~/.julia/artifacts
+          key: artifacts-self-hosted-${{ hashFiles('**/Project.toml') }}-${{ hashFiles('**/Manifest.toml') }}
+          restore-keys: artifacts-self-hosted-
+
+      - name: Cache Julia packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.julia/compiled
+          key: compiled-self-hosted-${{ hashFiles('**/Project.toml') }}-${{ hashFiles('**/Manifest.toml') }}
+          restore-keys: compiled-self-hosted-
 
       - name: Install package dependencies
         run: |
