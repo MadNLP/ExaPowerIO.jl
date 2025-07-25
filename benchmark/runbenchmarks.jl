@@ -1,33 +1,3 @@
-using Pkg
-
-Pkg.activate(@__DIR__)
-Pkg.develop(path=dirname(@__DIR__))
-
-using ExaPowerIO, BenchmarkTools, PowerModels, PGLib
-
-PowerModels.silence()
-ExaPowerIO.silence()
-
-NUM_SAMPLES = 10
-for (i, arg) in enumerate(ARGS)
-    if arg == "--num-samples" || arg == "-n"
-        global NUM_SAMPLES
-        NUM_SAMPLES = ARGS[i+1]
-        break
-    end
-end
-COMPARE = "--compare" in ARGS
-INTERMEDIATE = "--intermediate" in ARGS
-@info "Running benchmarks with num-samples: $NUM_SAMPLES, compare to PowerModels: $COMPARE, benchmark intermediate steps: $INTERMEDIATE"
-
-function run_pm(dataset :: String)
-    path = joinpath(PGLib.PGLib_opf, dataset)
-    pm_output = PowerModels.parse_file(path)
-    PowerModels.standardize_cost_terms!(pm_output, order = 2)
-    PowerModels.calc_thermal_limits!(pm_output)
-end
-
-datadir = "../data/"
 CASES = [
     (Float64, "pglib_opf_case3_lmbd.m"),
     (Float64, "pglib_opf_case1803_snem.m"),
@@ -97,33 +67,60 @@ CASES = [
     (Float64, "pglib_opf_case9591_goc.m"),
 ]
 
+using Pkg
+
+Pkg.activate(@__DIR__)
+Pkg.develop(path=dirname(@__DIR__))
+
+using ExaPowerIO, BenchmarkTools, PowerModels, PGLib, Profile, PProf, Logging
+
+PowerModels.silence()
+
+NUM_SAMPLES = 10
+for (i, arg) in enumerate(ARGS)
+    if arg == "--num-samples" || arg == "-n"
+        global NUM_SAMPLES
+        NUM_SAMPLES = ARGS[i+1]
+        break
+    end
+end
+COMPARE = "--compare" in ARGS
+PROFILE = "--profile" in ARGS
+@info "Running benchmarks with num-samples: $NUM_SAMPLES, compare to PowerModels: $COMPARE, profile: $PROFILE"
+
+function run_pm(dataset :: String)
+    path = joinpath(PGLib.PGLib_opf, dataset)
+    pm_output = PowerModels.parse_file(path)
+    PowerModels.standardize_cost_terms!(pm_output, order = 2)
+    PowerModels.calc_thermal_limits!(pm_output)
+end
+
+datadir = "../data/"
 function display_btimed(btimed :: NamedTuple)
     display(btimed[(:time, :bytes, :alloc, :gctime)])
 end
 
-for (type, dataset) in CASES
-    if INTERMEDIATE
-        @info "ExaPowerIO.jl: parsing $dataset to structs"
-        parsed = @btimed ExaPowerIO.parse_pglib{$type}($dataset; out_type=ExaPowerIO.PowerData) samples=NUM_SAMPLES
-        display_btimed(parsed)
-        @info "ExaPowerIO.jl: converting $dataset struct to named tuple"
-        nt = @btimed ExaPowerIO.struct_to_nt($(parsed.value))
-        display_btimed(nt)
-        @info "ExaPowerIO.jl: total"
-        display((
-            time = nt.time+parsed.time,
-            bytes = nt.bytes+parsed.bytes,
-            alloc = nt.alloc+parsed.alloc,
-            gctime = nt.gctime+parsed.gctime
-        ))
-    else
-        @info "ExaPowerIO.jl " * dataset
-        nt = @btimed ExaPowerIO.parse_pglib{$type}($dataset; out_type=NamedTuple) samples=NUM_SAMPLES
-        display_btimed(nt)
+if PROFILE
+    Profile.clear()
+    global_logger(ConsoleLogger(stderr, Logging.Warn))
+    @btime begin
+        @profile begin
+            for (type, dataset) in CASES
+                ExaPowerIO.parse_pglib(type, Vector, dataset; out_type=NamedTuple)
+            end
+        end
     end
-    if COMPARE
-        @info "PowerModels.jl " * dataset
-        nt = @btimed run_pm($dataset) samples=NUM_SAMPLES
+    @info "Done!"
+    pprof()
+else
+    for (type, dataset) in CASES
+        @info "ExaPowerIO.jl " * dataset
+        nt = @btimed ExaPowerIO.parse_pglib(type, Vector, $dataset; out_type=NamedTuple) samples=NUM_SAMPLES
         display_btimed(nt)
+        if COMPARE
+            @info "PowerModels.jl " * dataset
+            nt = @btimed run_pm($dataset) samples=NUM_SAMPLES
+            display_btimed(nt)
+        end
     end
 end

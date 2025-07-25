@@ -1,7 +1,39 @@
 # FOR CONVENIENCE, the MATPOWER file spec
 # https://matpower.app/manual/matpower/DataFileFormat.html
 
-"""
+macro as_nt(struct_expr)
+    if struct_expr.head != :struct
+        error("@to_namedtuple must be applied to a struct definition")
+    end
+    struct_name = struct_expr.args[2] isa Symbol ? struct_expr.args[2] : struct_expr.args[2].args[1]
+    nt_expr = Expr(:tuple)
+    for line in filter(child -> child isa Expr, struct_expr.args[3].args)
+        push!(nt_expr.args, Expr(:(=), line.args[1], Expr(:., :obj, QuoteNode(line.args[1]))))
+    end
+    return esc(quote
+        $struct_expr
+        function struct_to_nt(obj::$struct_name{T})::NamedTuple where {T<:Real}
+            $nt_expr
+        end
+    end)
+end
+
+@as_nt struct BusData{T <: Real}
+    bus_i :: Int
+    type :: Int
+    pd :: T
+    qd :: T
+    gs :: T
+    bs :: T
+    area :: Int
+    vm :: T
+    va :: T
+    baseKV :: T
+    zone :: Int
+    vmax :: T
+    vmin :: T
+end
+@doc """
     struct BusData{T <: Real}
         bus_i :: Int
         type :: Int
@@ -17,23 +49,99 @@
         vmax :: T
         vmin :: T
     end
-"""
-struct BusData{T <: Real}
-    bus_i :: Int
-    type :: Int
-    pd :: T
-    qd :: T
-    gs :: T
-    bs :: T
-    area :: Int
-    vm :: T
-    va :: T
-    baseKV :: T
-    zone :: Int
-    vmax :: T
-    vmin :: T
+""" BusData
+
+@as_nt struct BranchData{T <: Real}
+    fbus :: Int
+    tbus :: Int
+    br_r :: T
+    br_x :: T
+    b_fr :: T
+    b_to :: T
+    g_fr :: T
+    g_to :: T
+    ratea ::T
+    rateb :: T
+    ratec :: T
+    tap :: T
+    shift :: T
+    status :: Int
+    angmin :: T
+    angmax :: T
+    c1 :: T
+    c2 :: T
+    c3 :: T
+    c4 :: T
+    c5 :: T
+    c6 :: T
+    c7 :: T
+    c8 :: T
 end
-"""
+function BranchData{T}(
+    fbus::Int,
+    tbus::Int,
+    br_r::T,
+    br_x::T,
+    b_fr::T,
+    b_to::T,
+    g_fr::T,
+    g_to::T,
+    ratea::T,
+    rateb::T,
+    ratec::T,
+    tap::T,
+    shift::T,
+    status::Int,
+    angmin::T,
+    angmax::T,
+) where {T<:Real}
+    x = br_r + im * br_x
+    xi = inv(x)
+    y = ifelse(isfinite(xi), xi, zero(xi))
+    g = real(y)
+    b = imag(y)
+    if isapprox(tap, T(0.0))
+        tap = T(1.0)
+    end
+    tr = tap * cos(shift)
+    ti = tap * sin(shift)
+    ttm = tr^2 + ti^2
+    c1 = (-g * tr - b * ti) / ttm
+    c2 = (-b * tr + g * ti) / ttm
+    c3 = (-g * tr + b * ti) / ttm
+    c4 = (-b * tr - g * ti) / ttm
+    c5 = (g + g_fr) / ttm
+    c6 = (b + b_fr) / ttm
+    c7 = (g + g_to)
+    c8 = (b + b_to)
+    BranchData{T}(
+        fbus,
+        tbus,
+        br_r,
+        br_x,
+        b_fr,
+        b_to,
+        g_fr,
+        g_to,
+        ratea,
+        rateb,
+        ratec,
+        tap,
+        shift,
+        status,
+        angmin,
+        angmax,
+        c1,
+        c2,
+        c3,
+        c4,
+        c5,
+        c6,
+        c7,
+        c8,
+    )
+end
+@doc """
     struct BranchData{T <: Real}
         fbus :: Int
         tbus :: Int
@@ -62,99 +170,28 @@ end
     end
 
 fbus and tbus are indices into the PowerData.bus Vector, not bus_i values
-"""
-struct BranchData{T <: Real}
-    fbus :: Int
-    tbus :: Int
-    br_r :: T
-    br_x :: T
-    b_fr :: T
-    b_to :: T
-    g_fr :: T
-    g_to :: T
-    ratea ::T
-    rateb :: T
-    ratec :: T
-    tap :: T
-    shift :: T
-    status :: Int
-    angmin :: T
-    angmax :: T
-    c1 :: T
-    c2 :: T
-    c3 :: T
-    c4 :: T
-    c5 :: T
-    c6 :: T
-    c7 :: T
-    c8 :: T
-    function BranchData{T}(
-        fbus::Int,
-        tbus::Int,
-        br_r::T,
-        br_x::T,
-        b_fr::T,
-        b_to::T,
-        g_fr::T,
-        g_to::T,
-        ratea::T,
-        rateb::T,
-        ratec::T,
-        tap::T,
-        shift::T,
-        status::Int,
-        angmin::T,
-        angmax::T,
-    ) where {T<:Real}
-        x = br_r + im * br_x
-        xi = inv(x)
-        y = ifelse(isfinite(xi), xi, zero(xi))
-        g = real(y)
-        b = imag(y)
-        if isapprox(tap, T(0.0))
-            tap = T(1.0)
-        end
-        tr = tap * cos(shift)
-        ti = tap * sin(shift)
-        ttm = tr^2 + ti^2
-        c1 = (-g * tr - b * ti) / ttm
-        c2 = (-b * tr + g * ti) / ttm
-        c3 = (-g * tr + b * ti) / ttm
-        c4 = (-b * tr - g * ti) / ttm
-        c5 = (g + g_fr) / ttm
-        c6 = (b + b_fr) / ttm
-        c7 = (g + g_to)
-        c8 = (b + b_to)
-        new{T}(
-            fbus,
-            tbus,
-            br_r,
-            br_x,
-            b_fr,
-            b_to,
-            g_fr,
-            g_to,
-            ratea,
-            rateb,
-            ratec,
-            tap,
-            shift,
-            status,
-            angmin,
-            angmax,
-            c1,
-            c2,
-            c3,
-            c4,
-            c5,
-            c6,
-            c7,
-            c8,
-        )
-    end
-end
+""" BranchData
 
-"""
+@as_nt struct StorageData{T <: Real}
+    storage_bus :: T
+    ps :: Int
+    qs :: T
+    energy :: T
+    energy_rating :: T
+    charge_rating :: T
+    discharge_rating :: T
+    charge_efficiency :: T
+    discharge_efficiency :: T
+    thermal_rating :: T
+    qmin :: T
+    qmax :: T
+    r :: T
+    x :: T
+    p_loss :: T
+    q_loss :: T
+    status :: Int
+end
+@doc """
     struct StorageData{T <: Real}
         storage_bus :: T
         ps :: Int
@@ -174,27 +211,27 @@ end
         q_loss :: T
         status :: Int
     end
-"""
-struct StorageData{T <: Real}
-    storage_bus :: T
-    ps :: Int
-    qs :: T
-    energy :: T
-    energy_rating :: T
-    charge_rating :: T
-    discharge_rating :: T
-    charge_efficiency :: T
-    discharge_efficiency :: T
-    thermal_rating :: T
-    qmin :: T
+""" StorageData
+
+@as_nt struct GenData{T <: Real}
+    bus :: Int
+    pg :: T
+    qg :: T
     qmax :: T
-    r :: T
-    x :: T
-    p_loss :: T
-    q_loss :: T
+    qmin :: T
+    vg :: T
+    mbase :: T
     status :: Int
+    pmax :: T
+    pmin :: T
+    i :: Int
+    model_poly :: Bool
+    startup :: T
+    shutdown :: T
+    n :: Int
+    c :: NTuple{3, T}
 end
-"""
+@doc """
     struct GenData{T <: Real}
         bus :: Int
         pg :: T
@@ -215,25 +252,7 @@ end
     end
 
 bus is an index into the PowerData.bus Vector, not bus_i values
-"""
-struct GenData{T <: Real}
-    bus :: Int
-    pg :: T
-    qg :: T
-    qmax :: T
-    qmin :: T
-    vg :: T
-    mbase :: T
-    status :: Int
-    pmax :: T
-    pmin :: T
-    i :: Int
-    model_poly :: Bool
-    startup :: T
-    shutdown :: T
-    n :: Int
-    c :: NTuple{3, T}
-end
+""" GenData
 
 """
     struct Data{T <: Real}
@@ -248,16 +267,32 @@ end
 all corespond to members of the mpc object created by a matpower file.
 Their fields correspond exactly with the columns of the relevant ```mpc``` member.
 """
-struct PowerData{T <: Real}
+struct PowerData{
+    T <: Real,
+    VBusT <: AbstractVector{BusData{T}},
+    VGenT <: AbstractVector{GenData{T}},
+    VBranchT <: AbstractVector{BranchData{T}},
+    VStorageT <: AbstractVector{StorageData{T}}
+}
     version :: String
     baseMVA :: T
-    bus :: Vector{BusData{T}}
-    gen :: Vector{GenData{T}}
-    branch :: Vector{BranchData{T}}
-    storage :: Vector{StorageData{T}}
+    bus :: VBusT
+    gen :: VGenT
+    branch :: VBranchT
+    storage :: VStorageT
 end
 
-const EMPTY_SUBSTRING = SubString("", 1, 0)
+function struct_to_nt(data::PowerData)
+    (
+        version = data.version,
+        baseMVA = data.baseMVA,
+        bus = struct_to_nt.(data.bus),
+        gen = struct_to_nt.(data.gen),
+        branch = struct_to_nt.(data.branch),
+        storage = struct_to_nt.(data.storage),
+    )
+end
+
 const MATPOWER_ARRAY_KEYS :: Vector{String} = ["bus", "gen", "branch", "storage", "gencost"]
 const MATPOWER_KEYS :: Vector{String} = [["version", "baseMVA", "areas"]; MATPOWER_ARRAY_KEYS]
 const INIT_WORDS_LEN = 25
@@ -265,35 +300,38 @@ const GITHUB_ISSUES = "https://github.com/MadNLP/ExaPowerIO.jl/issues."
 
 struct WordedString
     s :: SubString{String}
+    len :: Int
     extra_ends :: String
+    WordedString(s::SubString{String}, extra_ends::String) = new(s, length(s), extra_ends)
 end
 
 function Base.iterate(worded_string :: WordedString)
     iterate(worded_string, 1)
 end
 
-function Base.iterate(worded_string :: WordedString, start :: Int) :: Union{Nothing, Tuple{SubString{String}, Int}}
-    if start > length(worded_string.s)
+@views function Base.iterate(worded_string :: WordedString, start :: Int) :: Union{Nothing, Tuple{SubString{String}, Int}}
+    len = worded_string.len - start + 1
+    if len <= 0
         return nothing
     end
-    s = SubString(worded_string.s, start, length(worded_string.s))
+    s = worded_string.s[start:end]
     left = 1
-    while left <= length(s) && isspace(s[left])
+    while left <= len && isspace(s[left])
         left += 1
     end
-    if left > length(s)
+    if left > len
         return nothing
     end
     should_end = c -> isspace(c) || contains(worded_string.extra_ends, c)
     right = left
-    while right <= length(s) && !should_end(s[right])
+    while right <= len && !should_end(s[right])
         right += 1
     end
     # right is non-inclusive
     if should_end(s[left])
         right += 1
     end
-    (SubString(s, left, right - 1), right + start - 1)
+    (s[left:right-1], right + start - 1)
 end
 
 function Base.length(worded_string :: WordedString)
@@ -310,7 +348,7 @@ function Base.length(worded_string :: WordedString)
     len
 end
 
-function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: Real
+function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
     fstring = read(open(fname), String)
     lines :: Vector{SubString{String}} = split(fstring, "\n")
     in_array = false
@@ -321,11 +359,7 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
     storage :: Vector{StorageData{T}} = []
 
     row_num = 0
-    words :: Vector{SubString{String}} = [EMPTY_SUBSTRING for _ in 1:INIT_WORDS_LEN]
-    items = [T(0.0) for _ in 1:INIT_WORDS_LEN]
-    reallocated = false
-    bus_map :: Dict{Int, Int} = Dict()
-    @views for line in lines
+    for line in lines
         if in_array && length(line) >= 1 && line[1] == ']'
             if cur_key == "bus"
                 bus = Vector(undef, row_num)
@@ -353,10 +387,12 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
     line :: SubString{String} = lines[line_ind]
     version = ""
     baseMVA :: T = T(0.0)
-
+    bus_map :: Dict{Int, Int} = Dict()
+    words :: Vector{SubString{String}} = Vector(undef, INIT_WORDS_LEN)
+    items = Vector(undef, INIT_WORDS_LEN)
+    reallocated = false
     while true
         if length(line) != 0 && line[1] == '%'
-            comment = line
             line = lines[line_ind += 1] :: SubString{String}
             continue
         end
@@ -374,14 +410,14 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
             println(stderr, "ExaPowerIO.jl was forced to grow the words vector to length $num_words. Please ensure your input file is valid, and then open an issue at $GITHUB_ISSUES")
             reallocated = false
             let line = line
-                words = [EMPTY_SUBSTRING for _ in 1:num_words]
+                words = Vector(undef, num_words)
+                items = Vector(undef, INIT_WORDS_LEN)
             end
-            items = [T(0.0) for _ in 1:num_words]
             continue
         end
 
         if in_array && length(line) != 0 && line[1] != '%'
-            squares = findall(s -> s == "]", words)
+            squares = findall(s -> s == "]", words[1:num_words])
             first_sq = length(squares) == 0 ? typemax(Int64) : squares[1]
             first_semi = length(squares) == 0 ? typemax(Int64) : squares[1]
             num_items = min(min(first_semi - 1, first_sq - 1), num_words - 1)
@@ -411,7 +447,7 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
                         items[10],
                         round(Int, items[11]),
                         items[12],
-                        items[12],
+                        items[13],
                     )
                 elseif cur_key == "gen"
                     gen[row_num] = GenData(
@@ -504,7 +540,7 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
         elseif length(line) != 0 && line[1] != '%' && words[1] != "function"
             for key in MATPOWER_KEYS
                 full_name = "mpc.$key"
-                idxs = findall(s -> s == full_name, words) 
+                idxs = findall(s -> s == full_name, words[1:num_words])
                 if idxs != []
                     cur_key = key
                     break
@@ -532,7 +568,7 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
         end
     end
 
-    has_gen = [false for _ in 1:length(bus) ]
+    has_gen = [false for _ in 1:length(bus)]
     for gen in gen
         if gen.status == 1
             has_gen[gen.bus] = true
@@ -574,7 +610,7 @@ function parse_matpower(::Type{T}, fname :: String) :: PowerData{T} where T <: R
         end
     end
 
-    return PowerData(version, baseMVA, bus, gen, branch, storage)
+    return PowerData(version, baseMVA, V(bus), V(gen), V(branch), V(storage))
 end
 
 function standardize_cost_terms!(data :: PowerData{T}, order) where T <: Real
@@ -635,41 +671,4 @@ function calc_thermal_limits!(data :: PowerData{T}) where T <: Real
 
         branch.rateA = y_mag * m_vmax * c_max
     end
-end
-
-function process_ac_power_data(::Type{T}, filename) :: PowerData{T} where T <: Real
-    data = parse_matpower(T, filename)
-    standardize_cost_terms!(data, 2)
-    calc_thermal_limits!(data)
-    return data
-end
-
-should_recurse(fields) :: Bool =
-    all(typeof(field) == Symbol for field in fields) && !isempty(fields)
-"""
-    struct_to_nt(data :: T) :: NamedTuple where T
-
-This is a general purpose function for converting structs to named tuples.
-
-It is used internally when ```out_type=NamedTuple``` is passed to ```parse_pglib``` or ```parse_file```,
-and is more expensive than the actual parsing in both cases.
-
-We export this function for those wishing to compare the performance of ```out_type=ExaPowerIO.PowerData``` with ```out_type=NamedTuple```,
-as well as benchmarking reasons.
-"""
-function struct_to_nt(data :: T) :: NamedTuple where T
-    result = NamedTuple()
-    for field in fieldnames(T)
-        val = getfield(data, field)
-        next_fields = fieldnames(typeof(val))
-        if typeof(val) <: Vector
-            if !isempty(val) && should_recurse(fieldnames(typeof(val[1])))
-                val = map(struct_to_nt, val)
-            end
-        elseif should_recurse(next_fields)
-            val = struct_to_nt(val)
-        end
-        result = merge(result, (;field => val))
-    end
-    return result
 end

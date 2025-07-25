@@ -4,7 +4,6 @@ ExaPowerIO exports three functions:
 ```@docs
 ExaPowerIO.parse_pglib
 ExaPowerIO.parse_file
-ExaPowerIO.struct_to_nt
 ```
 
 ```@docs

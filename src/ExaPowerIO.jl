@@ -24,9 +24,10 @@ parse_file(dataset_query; out_file) will return parse_file(Float64, dataset_quer
 """
 function parse_pglib(
     ::Type{T},
+    ::Type{V},
     dataset_query :: String;
     out_type=PowerData{T}
-) :: Union{PowerData{T}, NamedTuple} where T<:Real
+) :: Union{PowerData{T}, NamedTuple} where {T<:Real, V<:AbstractVector}
     pglib_matches = PGLib.find_pglib_case(dataset_query)
     dataset = if length(pglib_matches) == 0
         throw(error("No matches found for pglib dataset: $dataset_query"))
@@ -35,14 +36,14 @@ function parse_pglib(
     else
         pglib_matches[1]
     end
-    parse_file(T, joinpath(PGLib.PGLib_opf, dataset); out_type)
+    parse_file(T, V, joinpath(PGLib.PGLib_opf, dataset); out_type)
 end
 
 function parse_pglib(
     dataset_query :: String;
     out_type=PowerData{Float64}
 ) :: Union{PowerData{Float64}, NamedTuple}
-    parse_pglib(Float64, dataset_query; out_type)
+    parse_pglib(Float64, Vector, dataset_query; out_type)
 end
 
 """
@@ -63,14 +64,17 @@ parse_file(dataset_query; out_file) will return parse_file{Float64}(dataset_quer
 """
 function parse_file(
     ::Type{T},
+    ::Type{V},
     fname :: String;
     out_type=PowerData{T}
-) :: Union{PowerData{T}, NamedTuple} where T<:Real
-    if out_type != PowerData && out_type != NamedTuple
+) :: Union{PowerData{T}, NamedTuple} where {T<:Real, V<:AbstractVector}
+    if !(out_type <: PowerData) && out_type != NamedTuple
         @error "Argument out_type must have value NamedTuple | ExaPowerIO.Data"
     end
     @info "Loading MATPOWER file at " * fname
-    data = process_ac_power_data(T, fname)
+    data = parse_matpower(T, V, fname)
+    standardize_cost_terms!(data, 2)
+    calc_thermal_limits!(data)
     return out_type <: PowerData ? data : struct_to_nt(data)
 end
 
@@ -78,9 +82,9 @@ function parse_file(
     fname :: String;
     out_type=PowerData{Float64}
 ) :: Union{PowerData{Float64}, NamedTuple}
-    parse_file(Float64, fname; out_type)
+    parse_file(Float64, Vector, fname; out_type)
 end
 
-export parse_file, parse_pglib, struct_to_nt, PowerData, BusData, GenData, BranchData, StorageData
+export parse_file, parse_pglib, PowerData, BusData, GenData, BranchData, StorageData
 
 end # module ExaPowerIO
