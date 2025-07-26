@@ -295,10 +295,11 @@ end
 
 const MATPOWER_ARRAY_KEYS :: Vector{String} = ["bus", "gen", "branch", "storage", "gencost"]
 const MATPOWER_KEYS :: Vector{String} = [["version", "baseMVA", "areas"]; MATPOWER_ARRAY_KEYS]
-const INIT_WORDS_LEN = 25
+const NULL_VIEW::SubString{String} = SubString("", 1, 0)
+const MAX_WORDS = 25
 const PRINTABLE_ASCII = 96
 const ASCII_OFFSET = 31
-is_end(c::Char) = isspace(c) || c in "=;[]"
+is_end(c::Char) = isspace(c) || c in "=;[]%"
 const ENDS = ntuple(i -> is_end(Char(i + ASCII_OFFSET)), PRINTABLE_ASCII)
 
 struct WordedString
@@ -307,22 +308,18 @@ struct WordedString
     @inline WordedString(s::SubString{String}) = new(s, length(s))
 end
 
-@inline function Base.iterate(worded_string :: WordedString)
-    iterate(worded_string, 1)
-end
-
-@views function Base.iterate(worded_string :: WordedString, start :: Int) :: Union{Nothing, Tuple{SubString{String}, Int}}
+@views function iter_ws(worded_string :: WordedString, start :: Int) :: Tuple{SubString{String}, Int}
     len = worded_string.len - start + 1
-    if len <= 0 || worded_string.s[start] == '%'
-        return nothing
+    if len <= 0
+        return (NULL_VIEW, 0)
     end
     s = worded_string.s[start:end]
     left = 1
     while left <= len && isspace(s[left])
         left += 1
     end
-    if left > len
-        return nothing
+    if left > len || s[left] == '%'
+        return (NULL_VIEW, 0)
     end
     right = left
     should_end = c -> c > ASCII_OFFSET && ENDS[c - ASCII_OFFSET]
@@ -336,7 +333,39 @@ end
     (s[left:right-1], right + start - 1)
 end
 
-function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
+macro iter_to_ntuple(N, iter_expr)
+    n = if N isa Integer
+        N
+    else
+        try
+            eval(__module__, N)
+        catch
+            error("N must be a constant integer")
+        end
+    end
+    n isa Integer || error("N must be an integer")
+    n >= 0 || error("N must be non-negative")
+
+    iter_sym = gensym("iter")
+    state_sym = gensym("state")
+    x_syms = [gensym("x") for _ in 1:n]
+
+    body = Expr[]
+    push!(body, :($iter_sym = $(esc(iter_expr))))
+    push!(body, :($state_sym = iter_ws($iter_sym, 1)))
+    
+    for i in 1:n
+        push!(body, :($(x_syms[i]) = $state_sym[1]))
+        if i < n
+            push!(body, :($state_sym = $state_sym[2] == 0 ? (NULL_VIEW, 0) : iter_ws($iter_sym, $state_sym[2])))
+        end
+    end
+    push!(body, Expr(:tuple, x_syms...))
+
+    return Expr(:block, body...)
+end
+
+@views function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
     fstring = read(open(fname), String)
     lines :: Vector{SubString{String}} = split(fstring, "\n")
     in_array = false
@@ -363,7 +392,7 @@ function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V
         elseif in_array && ';' in line
             row_num += 1
         elseif length(line) > length("mpc.") && line[1:4] == "mpc."
-            cur_key = iterate(WordedString(line))[1][length("mpc.")+1:end]
+            cur_key = iter_ws(WordedString(line), 1)[1][length("mpc.")+1:end]
             if cur_key in MATPOWER_ARRAY_KEYS
                 in_array = true
             end
@@ -376,41 +405,20 @@ function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V
     version = ""
     baseMVA :: T = T(0.0)
     bus_map :: Dict{Int, Int} = Dict()
-    words :: Vector{SubString{String}} = Vector(undef, INIT_WORDS_LEN)
     reallocated = false
-    is_end = c -> isspace(c) || c in "=;[]%"
-    ends = ntuple(i -> is_end(Char(i + ASCII_OFFSET)), PRINTABLE_ASCII)
     while true
         if length(line) != 0 && line[1] == '%'
             line = lines[line_ind += 1] :: SubString{String}
             continue
         end
         num_words = 0
-        iter_state = 1
-        # words = ntuple(i -> begin
-        #                    @info iter_state
-        #                    (word, start) = iterate(ws)
-        #                end, INIT_WORDS_LEN)
-        num_words = 0
-        for (i, word) in enumerate(WordedString(line))
-            if word == "%"
+        words = @iter_to_ntuple 25 WordedString(line)
+        for i in 1:25
+            if words[i] == ""
                 break
             end
-            num_words = i
-            reallocated && continue
-            i > length(words) && (reallocated = true; continue)
-            words[i] = word
+            num_words += 1
         end
-        if reallocated
-            println(stderr, "ExaPowerIO.jl was forced to grow the words vector to length $num_words. Please ensure your input file is valid, and then open an issue at $GITHUB_ISSUES")
-            reallocated = false
-            let line = line
-                words = Vector(undef, num_words)
-                items = Vector(undef, INIT_WORDS_LEN)
-            end
-            continue
-        end
-
         if in_array && length(line) != 0 && line[1] != '%'
             if num_words >= 2 && words[num_words-1] == "]" && words[num_words] == ";"
                 if cur_key == "bus"
@@ -526,10 +534,10 @@ function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V
                 row_num += 1
             end
         elseif length(line) != 0 && line[1] != '%' && words[1] != "function"
+            cur_key = ""
             for key in MATPOWER_KEYS
                 full_name = "mpc.$key"
-                idxs = findall(s -> s == full_name, words[1:num_words])
-                if idxs != []
+                if !isnothing(iterate(filter(i -> words[i] == full_name, 1:num_words)))
                     cur_key = key
                     break
                 end
