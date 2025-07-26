@@ -293,21 +293,20 @@ function struct_to_nt(data::PowerData)
     )
 end
 
-const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "areas", "bus", "gen", "branch", "storage", "gencost"];
+const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "areas", "bus", "gencost", "gen", "branch", "storage"];
 const NULL_VIEW::SubString{String} = SubString("", 1, 0)
-const MAX_WORDS = 25
 const PRINTABLE_ASCII = 96
 const ASCII_OFFSET = 31
 is_end(c::Char) = isspace(c) || c in "=;[]%"
 const ENDS = ntuple(i -> is_end(Char(i + ASCII_OFFSET)), PRINTABLE_ASCII)
+const KEY_MIN_LEN = 4
 
 struct WordedString
     s :: SubString{String}
     len :: Int
-    @inline WordedString(s::SubString{String}) = new(s, length(s))
 end
 
-@views function iter_ws(ws :: WordedString, start :: Int) :: Tuple{SubString{String}, Int}
+@inbounds @views function iter_ws(ws :: WordedString, start :: Int) :: Tuple{SubString{String}, Int}
     if start > ws.len
         return (NULL_VIEW, 0)
     end
@@ -362,7 +361,7 @@ macro iter_to_ntuple(N, iter_expr)
     return Expr(:block, body...)
 end
 
-@inline @views function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
+@inbounds @inline @views function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
     fstring = read(open(fname), String)
     lines = split(fstring, "\n")
     num_lines = length(lines)
@@ -375,7 +374,7 @@ end
 
     row_num = 0
     for line in lines
-        line_len = length(line)
+        line_len = line.ncodeunits
         if in_array && line_len >= 1 && line[1] == ']'
             if cur_key == "bus"
                 bus = Vector(undef, row_num)
@@ -390,8 +389,8 @@ end
             in_array = false
         elseif in_array && ';' in line
             row_num += 1
-        elseif line_len > length("mpc.") && line[1:4] == "mpc." && line[end] == '['
-            cur_key = iter_ws(WordedString(line), 1)[1][length("mpc.")+1:end]
+        elseif line_len > KEY_MIN_LEN && line[1:4] == "mpc." && line[end] == '['
+            cur_key = iter_ws(WordedString(line, line_len), 1)[1][KEY_MIN_LEN+1:end]
             in_array = true
         end
     end
@@ -399,51 +398,52 @@ end
     row_num = 1
     line_ind = 1
     line = lines[line_ind]
-    line_len = length(line)
+    line_len = line.ncodeunits
     version = ""
     baseMVA :: T = T(0.0)
     bus_map :: Dict{Int, Int} = Dict()
     while true
         if line_len != 0 && line[1] == '%'
             line = lines[line_ind += 1]
-            line_len = length(line)
+            line_len = line.ncodeunits
             continue
         end
-        words = @iter_to_ntuple 25 WordedString(line)
         if in_array && line_len != 0
-            if words[1] == "]" && words[2] == ";"
+            if startswith(line, "];")
                 if cur_key == "bus"
                     bus_map = Dict(bus.bus_i => i for (i, bus) in enumerate(bus))
                 end
                 in_array = false
             elseif cur_key == "bus"
+                bus_words = @iter_to_ntuple 13 WordedString(line, line_len)
                 bus[row_num] = BusData(
-                    parse(Int, words[1]),
-                    parse(Int, words[2]),
-                    parse(T, words[3]) / baseMVA,
-                    parse(T, words[4]) / baseMVA,
-                    parse(T, words[5]),
-                    parse(T, words[6]),
-                    parse(Int, words[7]),
-                    parse(T, words[8]),
-                    parse(T, words[9]),
-                    parse(T, words[10]),
-                    parse(Int, words[11]),
-                    parse(T, words[12]),
-                    parse(T, words[13]),
+                    parse(Int, bus_words[1]),
+                    parse(Int, bus_words[2]),
+                    parse(T, bus_words[3]) / baseMVA,
+                    parse(T, bus_words[4]) / baseMVA,
+                    parse(T, bus_words[5]),
+                    parse(T, bus_words[6]),
+                    parse(Int, bus_words[7]),
+                    parse(T, bus_words[8]),
+                    parse(T, bus_words[9]),
+                    parse(T, bus_words[10]),
+                    parse(Int, bus_words[11]),
+                    parse(T, bus_words[12]),
+                    parse(T, bus_words[13]),
                 )
             elseif cur_key == "gen"
+                gen_words = @iter_to_ntuple 10 WordedString(line, line_len)
                 gen[row_num] = GenData(
-                    bus_map[parse(Int, words[1])],
-                    parse(T, words[2]) / baseMVA,
-                    parse(T, words[3]) / baseMVA,
-                    parse(T, words[4]) / baseMVA,
-                    parse(T, words[5]) / baseMVA,
-                    parse(T, words[6]),
-                    parse(T, words[7]),
-                    parse(Int, words[8]),
-                    parse(T, words[9]) / baseMVA,
-                    parse(T, words[10]) / baseMVA,
+                    bus_map[parse(Int, gen_words[1])],
+                    parse(T, gen_words[2]) / baseMVA,
+                    parse(T, gen_words[3]) / baseMVA,
+                    parse(T, gen_words[4]) / baseMVA,
+                    parse(T, gen_words[5]) / baseMVA,
+                    parse(T, gen_words[6]),
+                    parse(T, gen_words[7]),
+                    parse(Int, gen_words[8]),
+                    parse(T, gen_words[9]) / baseMVA,
+                    parse(T, gen_words[10]) / baseMVA,
                     row_num,
                     false,
                     T(0),
@@ -452,11 +452,12 @@ end
                     (T(0), T(0), T(0)),
                 )
             elseif cur_key == "gencost"
-                model_poly = parse(Int, words[1]) == 2
-                n = parse(Int, words[4])
+                genc_words = @iter_to_ntuple 7 WordedString(line, line_len)
+                model_poly = parse(Int, genc_words[1]) == 2
+                n = parse(Int, genc_words[4])
                 normalize_cost = let baseMVA = baseMVA
                     function normalize_cost(i :: Int)
-                        c = parse(T, words[4 + i])
+                        c = parse(T, genc_words[4 + i])
                         return model_poly ? baseMVA ^ (n-i) * c : c
                     end
                 end
@@ -473,60 +474,62 @@ end
                     gen[row_num].pmin,
                     row_num,
                     model_poly,
-                    parse(T, words[2]),
-                    parse(T, words[3]),
+                    parse(T, genc_words[2]),
+                    parse(T, genc_words[3]),
                     n,
                     ntuple(normalize_cost, 3)
                 )
             elseif cur_key == "branch"
-                br_b = parse(T, words[5])
+                branch_words = @iter_to_ntuple 13 WordedString(line, line_len)
+                br_b = parse(T, branch_words[5])
                 branch[row_num] = BranchData{T}(
-                    bus_map[parse(Int, words[1])],
-                    bus_map[parse(Int, words[2])],
-                    parse(T, words[3]),
-                    parse(T, words[4]),
+                    bus_map[parse(Int, branch_words[1])],
+                    bus_map[parse(Int, branch_words[2])],
+                    parse(T, branch_words[3]),
+                    parse(T, branch_words[4]),
                     br_b / T(2.0),
                     br_b / T(2.0),
                     T(0.0),
                     T(0.0),
-                    parse(T, words[6]) / baseMVA,
-                    parse(T, words[7]) / baseMVA,
-                    parse(T, words[8]) / baseMVA,
-                    parse(T, words[9]),
-                    (parse(T, words[10])) / T(180.0) * T(pi),
-                    parse(Int, words[11]),
-                    parse(T, words[12]) / T(180.0) * T(pi),
-                    parse(T, words[13]) / T(180.0) * T(pi),
+                    parse(T, branch_words[6]) / baseMVA,
+                    parse(T, branch_words[7]) / baseMVA,
+                    parse(T, branch_words[8]) / baseMVA,
+                    parse(T, branch_words[9]),
+                    (parse(T, branch_words[10])) / T(180.0) * T(pi),
+                    parse(Int, branch_words[11]),
+                    parse(T, branch_words[12]) / T(180.0) * T(pi),
+                    parse(T, branch_words[13]) / T(180.0) * T(pi),
                 )
             elseif cur_key == "storage"
+                storage_words = @iter_to_ntuple 17 WordedString(line, line_len)
                 storage[row_num] = StorageData(
-                    parse(T, words[1]),
-                    parse(T, words[2]),
-                    parse(T, words[3]),
-                    parse(T, words[4]),
-                    parse(T, words[5]),
-                    parse(T, words[6]),
-                    parse(T, words[7]),
-                    parse(T, words[8]),
-                    parse(T, words[9]),
-                    parse(T, words[10]),
-                    parse(T, words[11]),
-                    parse(T, words[12]),
-                    parse(T, words[13]),
-                    parse(T, words[14]),
-                    parse(T, words[15]),
-                    parse(T, words[16]),
-                    parse(T, words[17]),
+                    parse(T, storage_words[1]),
+                    parse(T, storage_words[2]),
+                    parse(T, storage_words[3]),
+                    parse(T, storage_words[4]),
+                    parse(T, storage_words[5]),
+                    parse(T, storage_words[6]),
+                    parse(T, storage_words[7]),
+                    parse(T, storage_words[8]),
+                    parse(T, storage_words[9]),
+                    parse(T, storage_words[10]),
+                    parse(T, storage_words[11]),
+                    parse(T, storage_words[12]),
+                    parse(T, storage_words[13]),
+                    parse(T, storage_words[14]),
+                    parse(T, storage_words[15]),
+                    parse(T, storage_words[16]),
+                    parse(T, storage_words[17]),
                 )
             end
             if in_array
                 row_num += 1
             end
-        elseif line_len != 0 && line[1] != '%' && words[1] != "function"
+        elseif !startswith(line, "function") && line_len > 0
             cur_key = ""
             for key in MATPOWER_KEYS
                 full_name = "mpc.$key"
-                if !isnothing(iterate(filter(i -> words[i] == full_name, 1:MAX_WORDS)))
+                if startswith(line, full_name)
                     cur_key = key
                     break
                 end
@@ -535,9 +538,10 @@ end
             if cur_key == ""
                 error("Error parsing data. Invalid variable assignment on line $(line_ind).")
             end
+            words = @iter_to_ntuple 3 WordedString(line, line_len)
             if cur_key == "version"
                 raw_data = words[3]
-                version = String(raw_data[2:length(raw_data)-1])
+                version = String(raw_data[2:raw_data.ncodeunits-1])
             elseif cur_key == "baseMVA"
                 baseMVA = parse(T, words[3]) :: T
             else
@@ -548,7 +552,7 @@ end
 
         if line_ind < num_lines
             line = lines[line_ind += 1]
-            line_len = length(line)
+            line_len = line.ncodeunits
         else
             break
         end
