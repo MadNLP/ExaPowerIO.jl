@@ -293,8 +293,7 @@ function struct_to_nt(data::PowerData)
     )
 end
 
-const MATPOWER_ARRAY_KEYS :: Vector{String} = ["bus", "gen", "branch", "storage", "gencost"]
-const MATPOWER_KEYS :: Vector{String} = [["version", "baseMVA", "areas"]; MATPOWER_ARRAY_KEYS]
+const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "areas", "bus", "gen", "branch", "storage", "gencost"];
 const NULL_VIEW::SubString{String} = SubString("", 1, 0)
 const MAX_WORDS = 25
 const PRINTABLE_ASCII = 96
@@ -308,29 +307,27 @@ struct WordedString
     @inline WordedString(s::SubString{String}) = new(s, length(s))
 end
 
-@views function iter_ws(worded_string :: WordedString, start :: Int) :: Tuple{SubString{String}, Int}
-    len = worded_string.len - start + 1
-    if len <= 0
+@views function iter_ws(ws :: WordedString, start :: Int) :: Tuple{SubString{String}, Int}
+    if start > ws.len
         return (NULL_VIEW, 0)
     end
-    s = worded_string.s[start:end]
-    left = 1
-    while left <= len && isspace(s[left])
+    left = start
+    while isspace(ws.s[left]) && left <= ws.len
         left += 1
     end
-    if left > len || s[left] == '%'
+    if left > ws.len || ws.s[left] == '%'
         return (NULL_VIEW, 0)
     end
     right = left
     should_end = c -> c > ASCII_OFFSET && ENDS[c - ASCII_OFFSET]
-    while right <= len && !should_end(Int8(s[right]))
+    while right <= ws.len && !should_end(Int8(ws.s[right]))
         right += 1
     end
     # right is non-inclusive
-    if should_end(Int8(s[left]))
+    if should_end(Int8(ws.s[left]))
         right += 1
     end
-    (s[left:right-1], right + start - 1)
+    (ws.s[left:right-1], right)
 end
 
 macro iter_to_ntuple(N, iter_expr)
@@ -365,11 +362,12 @@ macro iter_to_ntuple(N, iter_expr)
     return Expr(:block, body...)
 end
 
-@views function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
+@inline @views function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
     fstring = read(open(fname), String)
-    lines :: Vector{SubString{String}} = split(fstring, "\n")
+    lines = split(fstring, "\n")
+    num_lines = length(lines)
     in_array = false
-    cur_key :: String = ""
+    cur_key = ""
     bus :: Vector{BusData{T}} = []
     gen :: Vector{GenData{T}} = []
     branch :: Vector{BranchData{T}} = []
@@ -377,7 +375,8 @@ end
 
     row_num = 0
     for line in lines
-        if in_array && length(line) >= 1 && line[1] == ']'
+        line_len = length(line)
+        if in_array && line_len >= 1 && line[1] == ']'
             if cur_key == "bus"
                 bus = Vector(undef, row_num)
             elseif cur_key == "gen"
@@ -391,153 +390,143 @@ end
             in_array = false
         elseif in_array && ';' in line
             row_num += 1
-        elseif length(line) > length("mpc.") && line[1:4] == "mpc."
+        elseif line_len > length("mpc.") && line[1:4] == "mpc." && line[end] == '['
             cur_key = iter_ws(WordedString(line), 1)[1][length("mpc.")+1:end]
-            if cur_key in MATPOWER_ARRAY_KEYS
-                in_array = true
-            end
+            in_array = true
         end
     end
 
     row_num = 1
     line_ind = 1
-    line :: SubString{String} = lines[line_ind]
+    line = lines[line_ind]
+    line_len = length(line)
     version = ""
     baseMVA :: T = T(0.0)
     bus_map :: Dict{Int, Int} = Dict()
-    reallocated = false
     while true
-        if length(line) != 0 && line[1] == '%'
-            line = lines[line_ind += 1] :: SubString{String}
+        if line_len != 0 && line[1] == '%'
+            line = lines[line_ind += 1]
+            line_len = length(line)
             continue
         end
-        num_words = 0
         words = @iter_to_ntuple 25 WordedString(line)
-        for i in 1:25
-            if words[i] == ""
-                break
-            end
-            num_words += 1
-        end
-        if in_array && length(line) != 0 && line[1] != '%'
-            if num_words >= 2 && words[num_words-1] == "]" && words[num_words] == ";"
+        if in_array && line_len != 0
+            if words[1] == "]" && words[2] == ";"
                 if cur_key == "bus"
                     bus_map = Dict(bus.bus_i => i for (i, bus) in enumerate(bus))
                 end
                 in_array = false
-            elseif num_words != 0 && words[num_words] != ";"
-                error("Invalid matpower file. Line $(line_ind) array doesn't end with ; or ];")
-            elseif length(words) != 0
-                if cur_key == "bus"
-                    bus[row_num] = BusData(
-                        parse(Int, words[1]),
-                        parse(Int, words[2]),
-                        parse(T, words[3]) / baseMVA,
-                        parse(T, words[4]) / baseMVA,
-                        parse(T, words[5]),
-                        parse(T, words[6]),
-                        parse(Int, words[7]),
-                        parse(T, words[8]),
-                        parse(T, words[9]),
-                        parse(T, words[10]),
-                        parse(Int, words[11]),
-                        parse(T, words[12]),
-                        parse(T, words[13]),
-                    )
-                elseif cur_key == "gen"
-                    gen[row_num] = GenData(
-                        bus_map[parse(Int, words[1])],
-                        parse(T, words[2]) / baseMVA,
-                        parse(T, words[3]) / baseMVA,
-                        parse(T, words[4]) / baseMVA,
-                        parse(T, words[5]) / baseMVA,
-                        parse(T, words[6]),
-                        parse(T, words[7]),
-                        parse(Int, words[8]),
-                        parse(T, words[9]) / baseMVA,
-                        parse(T, words[10]) / baseMVA,
-                        row_num,
-                        false,
-                        T(0),
-                        T(0),
-                        0,
-                        (T(0), T(0), T(0)),
-                    )
-                elseif cur_key == "gencost"
-                    model_poly = parse(Int, words[1]) == 2
-                    n = parse(Int, words[4])
-                    normalize_cost = let baseMVA = baseMVA
-                        function normalize_cost(i :: Int)
-                            c = parse(T, words[4 + i])
-                            return model_poly ? baseMVA ^ (n-i) * c : c
-                        end
+            elseif cur_key == "bus"
+                bus[row_num] = BusData(
+                    parse(Int, words[1]),
+                    parse(Int, words[2]),
+                    parse(T, words[3]) / baseMVA,
+                    parse(T, words[4]) / baseMVA,
+                    parse(T, words[5]),
+                    parse(T, words[6]),
+                    parse(Int, words[7]),
+                    parse(T, words[8]),
+                    parse(T, words[9]),
+                    parse(T, words[10]),
+                    parse(Int, words[11]),
+                    parse(T, words[12]),
+                    parse(T, words[13]),
+                )
+            elseif cur_key == "gen"
+                gen[row_num] = GenData(
+                    bus_map[parse(Int, words[1])],
+                    parse(T, words[2]) / baseMVA,
+                    parse(T, words[3]) / baseMVA,
+                    parse(T, words[4]) / baseMVA,
+                    parse(T, words[5]) / baseMVA,
+                    parse(T, words[6]),
+                    parse(T, words[7]),
+                    parse(Int, words[8]),
+                    parse(T, words[9]) / baseMVA,
+                    parse(T, words[10]) / baseMVA,
+                    row_num,
+                    false,
+                    T(0),
+                    T(0),
+                    0,
+                    (T(0), T(0), T(0)),
+                )
+            elseif cur_key == "gencost"
+                model_poly = parse(Int, words[1]) == 2
+                n = parse(Int, words[4])
+                normalize_cost = let baseMVA = baseMVA
+                    function normalize_cost(i :: Int)
+                        c = parse(T, words[4 + i])
+                        return model_poly ? baseMVA ^ (n-i) * c : c
                     end
-                    gen[row_num] = GenData(
-                        gen[row_num].bus,
-                        gen[row_num].pg,
-                        gen[row_num].qg,
-                        gen[row_num].qmax,
-                        gen[row_num].qmin,
-                        gen[row_num].vg,
-                        gen[row_num].mbase,
-                        gen[row_num].status,
-                        gen[row_num].pmax,
-                        gen[row_num].pmin,
-                        row_num,
-                        model_poly,
-                        parse(T, words[2]),
-                        parse(T, words[3]),
-                        n,
-                        ntuple(normalize_cost, 3)
-                    )
-                elseif cur_key == "branch"
-                    br_b = parse(T, words[5])
-                    branch[row_num] = BranchData{T}(
-                        bus_map[parse(Int, words[1])],
-                        bus_map[parse(Int, words[2])],
-                        parse(T, words[3]),
-                        parse(T, words[4]),
-                        br_b / T(2.0),
-                        br_b / T(2.0),
-                        T(0.0),
-                        T(0.0),
-                        parse(T, words[6]) / baseMVA,
-                        parse(T, words[7]) / baseMVA,
-                        parse(T, words[8]) / baseMVA,
-                        parse(T, words[9]),
-                        (parse(T, words[10])) / T(180.0) * T(pi),
-                        parse(Int, words[11]),
-                        parse(T, words[12]) / T(180.0) * T(pi),
-                        parse(T, words[13]) / T(180.0) * T(pi),
-                    )
-                elseif cur_key == "storage"
-                    storage[row_num] = StorageData(
-                        parse(T, words[1]),
-                        parse(T, words[2]),
-                        parse(T, words[3]),
-                        parse(T, words[4]),
-                        parse(T, words[5]),
-                        parse(T, words[6]),
-                        parse(T, words[7]),
-                        parse(T, words[8]),
-                        parse(T, words[9]),
-                        parse(T, words[10]),
-                        parse(T, words[11]),
-                        parse(T, words[12]),
-                        parse(T, words[13]),
-                        parse(T, words[14]),
-                        parse(T, words[15]),
-                        parse(T, words[16]),
-                        parse(T, words[17]),
-                    )
                 end
+                gen[row_num] = GenData(
+                    gen[row_num].bus,
+                    gen[row_num].pg,
+                    gen[row_num].qg,
+                    gen[row_num].qmax,
+                    gen[row_num].qmin,
+                    gen[row_num].vg,
+                    gen[row_num].mbase,
+                    gen[row_num].status,
+                    gen[row_num].pmax,
+                    gen[row_num].pmin,
+                    row_num,
+                    model_poly,
+                    parse(T, words[2]),
+                    parse(T, words[3]),
+                    n,
+                    ntuple(normalize_cost, 3)
+                )
+            elseif cur_key == "branch"
+                br_b = parse(T, words[5])
+                branch[row_num] = BranchData{T}(
+                    bus_map[parse(Int, words[1])],
+                    bus_map[parse(Int, words[2])],
+                    parse(T, words[3]),
+                    parse(T, words[4]),
+                    br_b / T(2.0),
+                    br_b / T(2.0),
+                    T(0.0),
+                    T(0.0),
+                    parse(T, words[6]) / baseMVA,
+                    parse(T, words[7]) / baseMVA,
+                    parse(T, words[8]) / baseMVA,
+                    parse(T, words[9]),
+                    (parse(T, words[10])) / T(180.0) * T(pi),
+                    parse(Int, words[11]),
+                    parse(T, words[12]) / T(180.0) * T(pi),
+                    parse(T, words[13]) / T(180.0) * T(pi),
+                )
+            elseif cur_key == "storage"
+                storage[row_num] = StorageData(
+                    parse(T, words[1]),
+                    parse(T, words[2]),
+                    parse(T, words[3]),
+                    parse(T, words[4]),
+                    parse(T, words[5]),
+                    parse(T, words[6]),
+                    parse(T, words[7]),
+                    parse(T, words[8]),
+                    parse(T, words[9]),
+                    parse(T, words[10]),
+                    parse(T, words[11]),
+                    parse(T, words[12]),
+                    parse(T, words[13]),
+                    parse(T, words[14]),
+                    parse(T, words[15]),
+                    parse(T, words[16]),
+                    parse(T, words[17]),
+                )
+            end
+            if in_array
                 row_num += 1
             end
-        elseif length(line) != 0 && line[1] != '%' && words[1] != "function"
+        elseif line_len != 0 && line[1] != '%' && words[1] != "function"
             cur_key = ""
             for key in MATPOWER_KEYS
                 full_name = "mpc.$key"
-                if !isnothing(iterate(filter(i -> words[i] == full_name, 1:num_words)))
+                if !isnothing(iterate(filter(i -> words[i] == full_name, 1:MAX_WORDS)))
                     cur_key = key
                     break
                 end
@@ -547,18 +536,19 @@ end
                 error("Error parsing data. Invalid variable assignment on line $(line_ind).")
             end
             if cur_key == "version"
-                raw_data = words[num_words-1]
+                raw_data = words[3]
                 version = String(raw_data[2:length(raw_data)-1])
             elseif cur_key == "baseMVA"
-                baseMVA = parse(T, words[num_words-1]) :: T
+                baseMVA = parse(T, words[3]) :: T
             else
                 in_array = true
                 row_num = 1
             end
         end
 
-        if line_ind < length(lines)
-            line = lines[line_ind += 1] :: SubString{String}
+        if line_ind < num_lines
+            line = lines[line_ind += 1]
+            line_len = length(line)
         else
             break
         end
@@ -609,7 +599,7 @@ end
     return PowerData(version, baseMVA, V(bus), V(gen), V(branch), V(storage))
 end
 
-function standardize_cost_terms!(data :: PowerData{T}, order) where T <: Real
+@inline function standardize_cost_terms!(data :: PowerData{T}, order) where T <: Real
     gen_order = 1
     for (_, gen) in enumerate(data.gen)
         max_ind = 1
@@ -653,7 +643,7 @@ function standardize_cost_terms!(data :: PowerData{T}, order) where T <: Real
     end
 end
 
-function calc_thermal_limits!(data :: PowerData{T}) where T <: Real
+@inline function calc_thermal_limits!(data :: PowerData{T}) where T <: Real
     for branch in filter(branch -> branch.ratea <= 0, data.branch)
         xi = inv(branch.r + im * branch.x)
         y_mag = abs.(ifelse(isfinite(xi), xi, zero(xi)))

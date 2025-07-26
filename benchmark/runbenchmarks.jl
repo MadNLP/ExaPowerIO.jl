@@ -103,14 +103,11 @@ end
 if PROFILE
     Profile.clear()
     global_logger(ConsoleLogger(stderr, Logging.Warn))
-    @btime begin
         @profile begin
             for (type, dataset) in CASES
                 ExaPowerIO.parse_pglib(type, Vector, dataset; out_type=NamedTuple)
             end
         end
-    end
-    @info "Done!"
     pprof()
 else
     for (type, dataset) in CASES
