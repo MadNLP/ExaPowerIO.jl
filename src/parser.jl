@@ -367,23 +367,23 @@ end
     num_lines = length(lines)
     in_array = false
     cur_key = ""
-    bus = BusData{T}[]
-    gen = GenData{T}[]
-    branch = BranchData{T}[]
-    storage = StorageData{T}[]
+    bus :: Vector{BusData{T}} = []
+    gen :: Vector{GenData{T}} = []
+    branch :: Vector{BranchData{T}} = []
+    storage :: Vector{StorageData{T}} = []
 
     row_num = 0
     for line in lines
         line_len = line.ncodeunits
         if in_array && line_len >= 1 && line[1] == ']'
             if cur_key == "bus"
-                bus = V(undef, row_num)
+                bus = Vector(undef, row_num)
             elseif cur_key == "gen"
-                gen = V(undef, row_num)
+                gen = Vector(undef, row_num)
             elseif cur_key == "branch"
-                branch = V(undef, row_num)
+                branch = Vector(undef, row_num)
             elseif cur_key == "storage"
-                storage = V(undef, row_num)
+                storage = Vector(undef, row_num)
             end
             row_num = 0
             in_array = false
@@ -600,7 +600,7 @@ end
         end
     end
 
-    return PowerData(version, baseMVA, bus, gen, branch, storage)
+    return PowerData(version, baseMVA, V(bus), V(gen), V(branch), V(storage))
 end
 
 @inline function standardize_cost_terms!(data :: PowerData{T}, order) where T <: Real
