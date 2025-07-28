@@ -66,7 +66,6 @@ function parse_file(
 ) :: Union{NamedTuple, PowerData{T}} where {T<:Real, V<:AbstractVector}
     @info "Loading MATPOWER file at " * fname
     data = parse_matpower(T, V, fname)
-    standardize_cost_terms!(data, 2)
     return convert(out_type, data)
 end
 
