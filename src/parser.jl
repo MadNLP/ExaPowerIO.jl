@@ -353,26 +353,24 @@ end
 @inbounds @inline @views function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
     fstring = read(open(fname), String)
     lines = split(fstring, "\n")
-    num_lines = length(lines)
     in_array = false
     cur_key = ""
-    bus :: Vector{BusData{T}} = []
-    gen :: Vector{GenData{T}} = []
-    branch :: Vector{BranchData{T}} = []
-    storage :: Vector{StorageData{T}} = []
-
     row_num = 0
+    bus::V{BusData{T}} = []
+    gen::V{GenData{T}} = []
+    branch::V{BranchData{T}} = []
+    storage::V{StorageData{T}} = []
     for line in lines
         line_len = line.ncodeunits
         if in_array && line_len >= 1 && line[1] == ']'
             if cur_key == "bus"
-                bus = Vector(undef, row_num)
+                bus = V(undef, row_num)
             elseif cur_key == "gen"
-                gen = Vector(undef, row_num)
+                gen = V(undef, row_num)
             elseif cur_key == "branch"
-                branch = Vector(undef, row_num)
+                branch = V(undef, row_num)
             elseif cur_key == "storage"
-                storage = Vector(undef, row_num)
+                storage = V(undef, row_num)
             end
             row_num = 0
             in_array = false
@@ -385,22 +383,22 @@ end
     end
 
     row_num = 1
-    line_ind = 1
-    line = lines[line_ind]
-    line_len = line.ncodeunits
     version = ""
     baseMVA :: T = T(0.0)
-    bus_map :: Dict{Int, Int} = Dict()
-    while true
-        if line_len != 0 && line[1] == '%'
-            line = lines[line_ind += 1]
-            line_len = line.ncodeunits
-            continue
-        end
+    bus_map :: Vector{Int} = []
+    bus_offset :: Int = 0
+    for line in lines
+        line_len = line.ncodeunits
+        line_len != 0 && line[1] == '%' && continue
         if in_array && line_len != 0
             if startswith(line, "];")
                 if cur_key == "bus"
-                    bus_map = Dict(bus.bus_i => i for (i, bus) in enumerate(bus))
+                    bus_offset = minimum(b -> b.bus_i, bus) - 1
+                    max_bus = maximum(b -> b.bus_i, bus)
+                    bus_map = [0 for _ in 1:(max_bus-bus_offset)]
+                    for (i, b) in enumerate(bus)
+                        bus_map[b.bus_i - bus_offset] = i
+                    end
                 end
                 in_array = false
             elseif cur_key == "bus"
@@ -423,7 +421,7 @@ end
             elseif cur_key == "gen"
                 gen_words = @iter_to_ntuple 10 WordedString(line, line_len) (Int, T, T, T, T, T, T, Int, T, T)
                 gen[row_num] = GenData(
-                    bus_map[gen_words[1]],
+                    bus_map[gen_words[1] - bus_offset],
                     gen_words[2] / baseMVA,
                     gen_words[3] / baseMVA,
                     gen_words[4] / baseMVA,
@@ -471,8 +469,8 @@ end
             elseif cur_key == "branch"
                 branch_words = @iter_to_ntuple 13 WordedString(line, line_len) (Int, Int, T, T, T, T, T, T, T, T, Int, T, T)
                 branch[row_num] = BranchData{T}(
-                    bus_map[branch_words[1]],
-                    bus_map[branch_words[2]],
+                    bus_map[branch_words[1] - bus_offset],
+                    bus_map[branch_words[2] - bus_offset],
                     branch_words[3],
                     branch_words[4],
                     branch_words[5] / T(2.0),
@@ -537,13 +535,6 @@ end
                 row_num = 1
             end
         end
-
-        if line_ind < num_lines
-            line = lines[line_ind += 1]
-            line_len = line.ncodeunits
-        else
-            break
-        end
     end
 
     has_gen = [false for _ in 1:length(bus)]
@@ -588,5 +579,5 @@ end
         end
     end
 
-    return PowerData(version, baseMVA, V(bus), V(gen), V(branch), V(storage))
+    return PowerData(version, baseMVA, bus, gen, branch, storage)
 end
