@@ -646,19 +646,3 @@ end
         )
     end
 end
-
-@inline function calc_thermal_limits!(data :: PowerData{T}) where T <: Real
-    for branch in filter(branch -> branch.ratea <= 0, data.branch)
-        xi = inv(branch.r + im * branch.x)
-        y_mag = abs.(ifelse(isfinite(xi), xi, zero(xi)))
-
-        fr_vmax = data.bus[branch.fbus].vmax
-        to_vmax = data.bus[branch.tbus].vmax
-        m_vmax = max(fr_vmax, to_vmax)
-
-        theta_max = max(abs(branch.angmin), abs(branch.angmax))
-        c_max = sqrt(fr_vmax^2 + to_vmax^2 - 2*fr_vmax*to_vmax*cos(theta_max))
-
-        branch.rateA = y_mag * m_vmax * c_max
-    end
-end

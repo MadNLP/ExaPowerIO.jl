@@ -26,8 +26,8 @@ function parse_pglib(
     ::Type{T},
     ::Type{V},
     dataset_query :: String;
-    out_type=PowerData{T}
-) :: Union{PowerData{T}, NamedTuple} where {T<:Real, V<:AbstractVector}
+    out_type=PowerData
+) :: Union{NamedTuple, PowerData{T}} where {T<:Real, V<:AbstractVector}
     pglib_matches = PGLib.find_pglib_case(dataset_query)
     dataset = if length(pglib_matches) == 0
         throw(error("No matches found for pglib dataset: $dataset_query"))
@@ -39,12 +39,8 @@ function parse_pglib(
     parse_file(T, V, joinpath(PGLib.PGLib_opf, dataset); out_type)
 end
 
-function parse_pglib(
-    dataset_query :: String;
-    out_type=PowerData{Float64}
-) :: Union{PowerData{Float64}, NamedTuple}
-    parse_pglib(Float64, Vector, dataset_query; out_type)
-end
+convert(::Type{T}, data::PowerData) where T<:PowerData = data
+convert(::Type{T}, data::PowerData) where T<:NamedTuple = struct_to_nt(data)
 
 """
     parse_file(
@@ -66,23 +62,12 @@ function parse_file(
     ::Type{T},
     ::Type{V},
     fname :: String;
-    out_type=PowerData{T}
-) :: Union{PowerData{T}, NamedTuple} where {T<:Real, V<:AbstractVector}
-    if !(out_type <: PowerData) && out_type != NamedTuple
-        @error "Argument out_type must have value NamedTuple | ExaPowerIO.Data"
-    end
+    out_type=PowerData
+) :: Union{NamedTuple, PowerData{T}} where {T<:Real, V<:AbstractVector}
     @info "Loading MATPOWER file at " * fname
     data = parse_matpower(T, V, fname)
     standardize_cost_terms!(data, 2)
-    calc_thermal_limits!(data)
-    return out_type <: PowerData ? data : struct_to_nt(data)
-end
-
-function parse_file(
-    fname :: String;
-    out_type=PowerData{Float64}
-) :: Union{PowerData{Float64}, NamedTuple}
-    parse_file(Float64, Vector, fname; out_type)
+    return convert(out_type, data)
 end
 
 export parse_file, parse_pglib, PowerData, BusData, GenData, BranchData, StorageData
