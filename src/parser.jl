@@ -350,45 +350,38 @@ macro iter_to_ntuple(n, iter_expr, types)
     return Expr(:block, body...)
 end
 
+function get_arr_len(lines :: Vector{SubString{String}}, num_lines::Int, start::Int)::Int
+    line_ind = start
+    while line_ind <= num_lines
+        line_ind += 1
+        if lines[line_ind][1] == ']'
+            return line_ind - start - 1
+        end
+    end
+    error("Array defined on line $start was not closed")
+end
+
 @inbounds @inline @views function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
     fstring = read(open(fname), String)
     lines = split(fstring, "\n")
     in_array = false
     cur_key = ""
     row_num = 0
-    bus::V{BusData{T}} = []
-    gen::V{GenData{T}} = []
-    branch::V{BranchData{T}} = []
-    storage::V{StorageData{T}} = []
-    for line in lines
-        line_len = line.ncodeunits
-        if in_array && line_len >= 1 && line[1] == ']'
-            if cur_key == "bus"
-                bus = V(undef, row_num)
-            elseif cur_key == "gen"
-                gen = V(undef, row_num)
-            elseif cur_key == "branch"
-                branch = V(undef, row_num)
-            elseif cur_key == "storage"
-                storage = V(undef, row_num)
-            end
-            row_num = 0
-            in_array = false
-        elseif in_array && ';' in line
-            row_num += 1
-        elseif line_len > KEY_MIN_LEN && line[1:4] == "mpc." && line[end] == '['
-            cur_key = iter_ws(WordedString(line, line_len), 1)[1][KEY_MIN_LEN+1:end]
-            in_array = true
-        end
-    end
+    bus = BusData{T}[]
+    gen = GenData{T}[]
+    branch = BranchData{T}[]
+    storage = StorageData{T}[]
+    num_lines = length(lines)
 
     row_num = 1
     version = ""
     baseMVA :: T = T(0.0)
     bus_map :: Vector{Int} = []
     bus_offset :: Int = 0
+    line_ind = 0
     for line in lines
         line_len = line.ncodeunits
+        line_ind += 1
         line_len != 0 && line[1] == '%' && continue
         if in_array && line_len != 0
             if startswith(line, "];")
@@ -531,6 +524,16 @@ end
                 word = split(line)[3]
                 baseMVA = parse(T, word[1:length(word)-1]) :: T
             else
+                arr_len = get_arr_len(lines, num_lines, line_ind)
+                if cur_key == "bus"
+                    bus = V{BusData{T}}(undef, arr_len)
+                elseif cur_key == "gen"
+                    gen = V{GenData{T}}(undef, arr_len)
+                elseif cur_key == "branch"
+                    branch = V{BranchData{T}}(undef, arr_len)
+                elseif cur_key == "storage"
+                    storage = V{StorageData{T}}(undef, arr_len)
+                end
                 in_array = true
                 row_num = 1
             end

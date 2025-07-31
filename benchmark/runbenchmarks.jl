@@ -64,7 +64,7 @@ if PROFILE
     @profile run_exapower!()
     pprof()
 else
-    @benchmark run_exapower!()
+    display(@benchmark run_exapower!())
 end
 global_logger(ConsoleLogger(stderr, Logging.Info))
 
@@ -73,10 +73,10 @@ if COMPARE_JLD2
         JLD2.save(joinpath(datadir, dataset[begin:end-2] * ".jld2"), Dict("data" => data[i]))
     end
     @info "Running JLD2:"
-    @benchmark run_jld2()
+    display(@benchmark run_jld2())
 end
 
 if COMPARE_PM
     @info "Running PowerModels:"
-    @benchmark run_pm()
+    display(@benchmark run_pm())
 end
