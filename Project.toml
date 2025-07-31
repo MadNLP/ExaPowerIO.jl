@@ -8,3 +8,4 @@ PGLib = "07a8691f-3d11-4330-951b-3c50f98338be"
 
 [compat]
 PGLib = "0.2.1"
+julia = "1.9"
