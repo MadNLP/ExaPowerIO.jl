@@ -366,7 +366,6 @@ end
     lines = split(fstring, "\n")
     in_array = false
     cur_key = ""
-    row_num = 0
     bus = BusData{T}[]
     gen = GenData{T}[]
     branch = BranchData{T}[]
