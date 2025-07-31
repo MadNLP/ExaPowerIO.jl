@@ -6,7 +6,7 @@ NUM_SAMPLES = 10
 for (i, arg) in enumerate(ARGS)
     if arg == "--num-samples" || arg == "-n"
         global NUM_SAMPLES
-        NUM_SAMPLES = ARGS[i+1]
+        NUM_SAMPLES = parse(Int, ARGS[i+1])
         break
     end
 end
@@ -25,22 +25,22 @@ output pprof file: $(PROFILE)
 datadir = "../data/"
 
 function run_exapower!()
-    data = Vector{NamedTuple}(undef, length(CASES))
+    data = Vector{ExaPowerIO.PowerData}(undef, length(CASES))
     for (i, dataset) in enumerate(CASES)
-        data[i] = ExaPowerIO.parse_pglib(Float64, Vector, dataset; out_type=NamedTuple)
+        data[i] = ExaPowerIO.parse_pglib(Float64, Vector, dataset; out_type=ExaPowerIO.PowerData)
     end
     data
 end
 
 function run_jld2()
     for dataset in CASES
-        JLD2.load(joinpath(datadir, dataset * ".jld2"))
+        JLD2.load(joinpath(datadir, dataset[begin:end-2] * ".jld2"))
     end
 end
 
 function run_pm()
     for dataset in CASES
-        path = joinpath(PGLib.PGLib_opf, dataset * ".m")
+        path = joinpath(PGLib.PGLib_opf, dataset[begin:end-2] * ".m")
         pm_output = PowerModels.parse_file(path)
         PowerModels.standardize_cost_terms!(pm_output, order = 2)
         PowerModels.calc_thermal_limits!(pm_output)
@@ -64,19 +64,19 @@ if PROFILE
     @profile run_exapower!()
     pprof()
 else
-    @btime run_exapower!()
+    @benchmark run_exapower!()
 end
 global_logger(ConsoleLogger(stderr, Logging.Info))
 
 if COMPARE_JLD2
     for (i, dataset) in enumerate(CASES)
-        JLD2.save(joinpath(datadir, dataset * ".jld2"), Dict("data" => data[i]))
+        JLD2.save(joinpath(datadir, dataset[begin:end-2] * ".jld2"), Dict("data" => data[i]))
     end
     @info "Running JLD2:"
-    @btime run_jld2()
+    @benchmark run_jld2()
 end
 
 if COMPARE_PM
     @info "Running PowerModels:"
-    @btime run_pm()
+    @benchmark run_pm()
 end
