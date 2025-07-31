@@ -8,5 +8,8 @@ PowerModels = "c36e90e8-916a-50a6-bd94-075b64ef4655"
 
 [compat]
 BenchmarkTools = "~1.6"
-PGLib = "0.2.1"
+ExaPowerIO = "~0.1"
+JLD2 = "~0.5"
+PGLib = "~0.2"
+PProf = "~3.2"
 PowerModels = "~0.21"
