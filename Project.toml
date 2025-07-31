@@ -8,10 +8,3 @@ PGLib = "07a8691f-3d11-4330-951b-3c50f98338be"
 
 [compat]
 PGLib = "0.2.1"
-PowerModels = "~0.21"
-Test = "~1.11"
-
-[extras]
-BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
-PowerModels = "c36e90e8-916a-50a6-bd94-075b64ef4655"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
