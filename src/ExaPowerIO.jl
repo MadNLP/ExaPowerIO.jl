@@ -1,6 +1,8 @@
 module ExaPowerIO
 
-import PGLib
+using Artifacts
+
+const PGLib_opf = joinpath(artifact"PGLib_opf","pglib-opf-23.07")
 
 include("parser.jl")
 
@@ -28,15 +30,11 @@ function parse_pglib(
     dataset_query :: String;
     out_type=PowerData
 ) :: Union{NamedTuple, PowerData{T}} where {T<:Real, V<:AbstractVector}
-    pglib_matches = PGLib.find_pglib_case(dataset_query)
-    dataset = if length(pglib_matches) == 0
+    pglib_file = joinpath(PGLib_opf, dataset_query)
+    if !isfile(pglib_file)
         throw(error("No matches found for pglib dataset: $dataset_query"))
-    elseif length(pglib_matches) > 1
-        throw(error("Ambiguity when specifying dataset $dataset_query. Possible matches: $pglib_matches"))
-    else
-        pglib_matches[1]
     end
-    parse_file(T, V, joinpath(PGLib.PGLib_opf, dataset); out_type)
+    parse_file(T, V, pglib_file; out_type)
 end
 
 convert(::Type{T}, data::PowerData) where T<:PowerData = data
