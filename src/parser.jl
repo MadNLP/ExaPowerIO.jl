@@ -295,10 +295,9 @@ end
 
 const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "areas", "bus", "gencost", "gen", "branch", "storage"];
 const NULL_VIEW::SubString{String} = SubString("", 1, 0)
-const PRINTABLE_ASCII = 96
-const ASCII_OFFSET = 31
+const PRINTABLE_ASCII = 256
 is_end(c::Char) = isspace(c) || c in "=;[]%"
-const ENDS = ntuple(i -> is_end(Char(i + ASCII_OFFSET)), PRINTABLE_ASCII)
+const ENDS = ntuple(i -> is_end(Char(i)), PRINTABLE_ASCII)
 const KEY_MIN_LEN = 4
 
 struct WordedString
@@ -318,7 +317,7 @@ end
         return (NULL_VIEW, 0)
     end
     right = left
-    should_end = c -> c > ASCII_OFFSET && ENDS[c - ASCII_OFFSET]
+    should_end = c -> ENDS[c]
     while right <= ws.len && !should_end(Int8(ws.s[right]))
         right += 1
     end
