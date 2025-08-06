@@ -15,12 +15,22 @@ ExaPowerIO.StorageData
 
 ### Example Usage
 
-```jldoctest
-julia> using ExaPowerIO, Logging
+```@meta
+# otherwise we get "Downloading artifact ..." in the output and doctests fail
+DocTestSetup = quote
+    using ExaPowerIO
+    result = parse_matpower("pglib_opf_case3_lmbd.m"; library=:pglib);
+end
 
-julia> result = with_logger(NullLogger()) do
-           parse_matpower("pglib_opf_case3_lmbd.m"; library=:pglib)
-       end;
+DocTestTeardown = quote
+    # restore settings, release resources, ...
+end
+```
+
+```jldoctest
+julia> using ExaPowerIO
+
+julia> result = parse_matpower("pglib_opf_case3_lmbd.m"; library=:pglib);
 
 julia> result.version
 "2"
