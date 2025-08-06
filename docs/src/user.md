@@ -16,7 +16,7 @@ ExaPowerIO.StorageData
 ### Example Usage
 
 ```jldoctest
-julia> using ExaPowerIO
+julia> using ExaPowerIO, LazyArtifacts
 
 julia> result=parse_matpower("pglib_opf_case3_lmbd.m"; library=:pglib);
 

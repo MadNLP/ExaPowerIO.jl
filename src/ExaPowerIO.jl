@@ -2,7 +2,6 @@ module ExaPowerIO
 
 using Artifacts
 
-
 include("parser.jl")
 
 """
