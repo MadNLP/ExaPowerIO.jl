@@ -10,7 +10,7 @@ PowerModels.silence()
         path = joinpath(PGLib.PGLib_opf, dataset)
         @info "Testing with dataset: $dataset"
         @info path
-        pp_output = ExaPowerIO.parse_pglib(dataset; out_type=ExaPowerIO.PowerData)
+        pp_output = ExaPowerIO.parse_matpower(dataset; library=:pglib)
         pm_output = PowerModels.parse_file(path)
         PowerModels.standardize_cost_terms!(pm_output, order = 2)
         PowerModels.calc_thermal_limits!(pm_output)

@@ -1,9 +1,8 @@
 # User Documentation
-ExaPowerIO exports three functions:
+ExaPowerIO exports 1 function:
 
 ```@docs
-ExaPowerIO.parse_pglib
-ExaPowerIO.parse_file
+ExaPowerIO.parse_matpower
 ```
 
 ```@docs
@@ -19,7 +18,7 @@ ExaPowerIO.StorageData
 ```jldoctest
 julia> using ExaPowerIO
 
-julia> result=parse_pglib("pglib_opf_case3_lmbd.m");
+julia> result=parse_matpower("pglib_opf_case3_lmbd.m"; library=:pglib);
 
 julia> result.version
 "2"

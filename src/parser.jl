@@ -360,7 +360,7 @@ function get_arr_len(lines :: Vector{SubString{String}}, num_lines::Int, start::
     error("Array defined on line $start was not closed")
 end
 
-@inbounds @inline @views function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
+@inbounds @inline @views function parse_matpower_inner(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
     fstring = read(open(fname), String)
     lines = split(fstring, "\n")
     in_array = false
