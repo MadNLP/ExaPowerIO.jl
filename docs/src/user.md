@@ -16,9 +16,11 @@ ExaPowerIO.StorageData
 ### Example Usage
 
 ```jldoctest
-julia> using ExaPowerIO
+julia> using ExaPowerIO, Logging
 
-julia> result = parse_matpower("pglib_opf_case3_lmbd.m"; library=:pglib);
+julia> result = with_logger(NullLogger()) do
+           parse_matpower("pglib_opf_case3_lmbd.m"; library=:pglib)
+       end;
 
 julia> result.version
 "2"
