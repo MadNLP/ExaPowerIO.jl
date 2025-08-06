@@ -1,6 +1,6 @@
 module ExaPowerIO
 
-using Artifacts
+using Artifacts, LazyArtifacts
 
 include("parser.jl")
 
