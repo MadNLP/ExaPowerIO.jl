@@ -21,7 +21,7 @@ Each value will be parsed as a ```T```.
 Currently, out_type can only be ```ExaPowerIO.PowerData{T}```, or ```NamedTuple```.
 
 ```julia
-parse_file(dataset_query; out_file) will return parse_file(Float64, dataset_query; out_file)
+parse_file(dataset_query; out_file) will return parse_file(Float64, Vector, dataset_query; out_file)
 ```
 """
 function parse_pglib(
@@ -66,7 +66,6 @@ function parse_file(
     fname :: String;
     out_type=PowerData
 ) :: Union{NamedTuple, PowerData{T}} where {T<:Real, V<:AbstractVector}
-    @info "Loading MATPOWER file at " * fname
     data = parse_matpower(T, V, fname)
     return convert(out_type, data)
 end
