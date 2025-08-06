@@ -37,6 +37,10 @@ function parse_pglib(
     parse_file(T, V, pglib_file; out_type)
 end
 
+parse_pglib(query; out_type=PowerData) = parse_pglib(Float64, Vector, query; out_type)
+parse_pglib(::Type{T}, query; out_type=PowerData) where {T<:Real} = parse_pglib(T, Vector, query; out_type)
+parse_pglib(::Type{V}, query; out_type=PowerData) where {V<:Vector} = parse_pglib(Float64, V, query; out_type)
+
 convert(::Type{T}, data::PowerData) where T<:PowerData = data
 convert(::Type{T}, data::PowerData) where T<:NamedTuple = struct_to_nt(data)
 
@@ -66,6 +70,10 @@ function parse_file(
     data = parse_matpower(T, V, fname)
     return convert(out_type, data)
 end
+
+parse_file(file; out_type=PowerData) = parse_file(Float64, Vector, file; out_type)
+parse_file(::Type{T}, file; out_type=PowerData) where {T<:Real} = parse_file(T, Vector, file; out_type)
+parse_file(::Type{V}, file; out_type=PowerData) where {V<:Vector} = parse_file(Float64, V, file; out_type)
 
 export parse_file, parse_pglib, PowerData, BusData, GenData, BranchData, StorageData
 
