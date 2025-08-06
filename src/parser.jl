@@ -173,8 +173,8 @@ fbus and tbus are indices into the PowerData.bus Vector, not bus_i values
 """ BranchData
 
 @as_nt struct StorageData{T <: Real}
-    storage_bus :: T
-    ps :: Int
+    storage_bus :: Int
+    ps :: T
     qs :: T
     energy :: T
     energy_rating :: T
@@ -193,8 +193,8 @@ fbus and tbus are indices into the PowerData.bus Vector, not bus_i values
 end
 @doc """
     struct StorageData{T <: Real}
-        storage_bus :: T
-        ps :: Int
+        storage_bus :: Int
+        ps :: T
         qs :: T
         energy :: T
         energy_rating :: T
@@ -478,7 +478,7 @@ end
                     branch_words[13] / T(180.0) * T(pi),
                 )
             elseif cur_key == "storage"
-                storage_words = @iter_to_ntuple 17 WordedString(line, line_len) (T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T)
+                storage_words = @iter_to_ntuple 17 WordedString(line, line_len) (Int, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, Int)
                 storage[row_num] = StorageData(
                     storage_words[1],
                     storage_words[2],
