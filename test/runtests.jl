@@ -56,33 +56,35 @@ PowerModels.silence()
         end
         for (i, pp_branch) in enumerate(pp_output.branch)
             pm_branch = pm_output["branch"][string(i)]
-            pp_tbus = pp_output.bus[pp_branch.tbus].bus_i
-            pp_fbus = pp_output.bus[pp_branch.fbus].bus_i
+            pp_tbus = pp_output.bus[pp_branch.t_bus].bus_i
+            pp_fbus = pp_output.bus[pp_branch.f_bus].bus_i
             if pm_branch["f_bus"] == pp_tbus && pm_branch["t_bus"] == pp_fbus
                 pp_branch = BranchData{Float64}(
-                    pp_branch.tbus,
-                    pp_branch.fbus,
+                    pp_branch.t_bus,
+                    pp_branch.f_bus,
                     pp_branch.br_r * pp_branch.tap^2,
                     pp_branch.br_x * pp_branch.tap^2,
                     pp_branch.b_to / pp_branch.tap^2,
                     pp_branch.b_fr * pp_branch.tap^2,
                     pp_branch.g_to / pp_branch.tap^2,
                     pp_branch.g_fr * pp_branch.tap^2,
-                    pp_branch.ratea,
-                    pp_branch.rateb,
-                    pp_branch.ratec,
+                    pp_branch.rate_a,
+                    pp_branch.rate_b,
+                    pp_branch.rate_c,
                     1 / pp_branch.tap,
                     -pp_branch.shift,
                     pp_branch.status,
                     -pp_branch.angmax,
                     -pp_branch.angmin,
+                    pp_branch.t_idx,
+                    pp_branch.f_idx
                 )
-                pp_tbus = pp_output.bus[pp_branch.tbus].bus_i
-                pp_fbus = pp_output.bus[pp_branch.fbus].bus_i
+                pp_tbus = pp_output.bus[pp_branch.t_bus].bus_i
+                pp_fbus = pp_output.bus[pp_branch.f_bus].bus_i
             end
-            @test isapprox(pp_branch.ratea, pm_branch["rate_a"])
-            @test isapprox(pp_branch.rateb, pm_branch["rate_b"])
-            @test isapprox(pp_branch.ratec, pm_branch["rate_c"])
+            @test isapprox(pp_branch.rate_a, pm_branch["rate_a"])
+            @test isapprox(pp_branch.rate_b, pm_branch["rate_b"])
+            @test isapprox(pp_branch.rate_c, pm_branch["rate_c"])
             @test isapprox(pp_branch.angmax, pm_branch["angmax"])
             @test isapprox(pp_branch.angmin, pm_branch["angmin"])
             @test isapprox(pp_branch.br_r, pm_branch["br_r"])
@@ -95,8 +97,8 @@ PowerModels.silence()
             @test isapprox(pp_branch.shift, pm_branch["shift"])
 
             @test pp_branch.status == pm_branch["br_status"]
-            @test pp_tbus == pm_branch["t_bus"]
             @test pp_fbus == pm_branch["f_bus"]
+            @test pp_tbus == pm_branch["t_bus"]
         end
         for (i, pp_storage) in enumerate(pp_output.storage)
             pm_storage = pm_output["storage"][string(i)]

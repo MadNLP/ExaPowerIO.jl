@@ -1,39 +1,7 @@
 # FOR CONVENIENCE, the MATPOWER file spec
 # https://matpower.app/manual/matpower/DataFileFormat.html
 
-macro as_nt(struct_expr)
-    if struct_expr.head != :struct
-        error("@to_namedtuple must be applied to a struct definition")
-    end
-    struct_name = struct_expr.args[2] isa Symbol ? struct_expr.args[2] : struct_expr.args[2].args[1]
-    nt_expr = Expr(:tuple)
-    for line in filter(child -> child isa Expr, struct_expr.args[3].args)
-        push!(nt_expr.args, Expr(:(=), line.args[1], Expr(:., :obj, QuoteNode(line.args[1]))))
-    end
-    return esc(quote
-        $struct_expr
-        function struct_to_nt(obj::$struct_name{T})::NamedTuple where {T<:Real}
-            $nt_expr
-        end
-    end)
-end
-
-@as_nt struct BusData{T <: Real}
-    bus_i :: Int
-    type :: Int
-    pd :: T
-    qd :: T
-    gs :: T
-    bs :: T
-    area :: Int
-    vm :: T
-    va :: T
-    baseKV :: T
-    zone :: Int
-    vmax :: T
-    vmin :: T
-end
-@doc """
+"""
     struct BusData{T <: Real}
         bus_i :: Int
         type :: Int
@@ -49,25 +17,74 @@ end
         vmax :: T
         vmin :: T
     end
-""" BusData
+"""
+struct BusData{T <: Real}
+    bus_i :: Int
+    type :: Int
+    pd :: T
+    qd :: T
+    gs :: T
+    bs :: T
+    area :: Int
+    vm :: T
+    va :: T
+    baseKV :: T
+    zone :: Int
+    vmax :: T
+    vmin :: T
+end
 
-@as_nt struct BranchData{T <: Real}
-    fbus :: Int
-    tbus :: Int
+"""
+    struct BranchData{T <: Real}
+        f_bus :: Int
+        t_bus :: Int
+        br_r :: T
+        br_x :: T
+        b_fr :: T,
+        b_to :: T,
+        g_fr :: T,
+        g_to :: T,
+        rate_a ::T
+        rate_b :: T
+        rate_c :: T
+        tap :: T
+        shift :: T
+        status :: Int
+        angmin :: T
+        angmax :: T
+        f_idx::Int
+        t_idx::Int
+        c1 :: T
+        c2 :: T
+        c3 :: T
+        c4 :: T
+        c5 :: T
+        c6 :: T
+        c7 :: T
+        c8 :: T
+    end
+
+f_bus and t_bus are indices into the PowerData.bus Vector, not bus_i values
+"""
+struct BranchData{T <: Real}
+    f_bus :: Int
+    t_bus :: Int
     br_r :: T
     br_x :: T
     b_fr :: T
     b_to :: T
     g_fr :: T
     g_to :: T
-    ratea ::T
-    rateb :: T
-    ratec :: T
+    rate_a ::T
+    rate_b :: T
+    rate_c :: T
     tap :: T
     shift :: T
     status :: Int
     angmin :: T
     angmax :: T
+    f_idx::Int
+    t_idx::Int
     c1 :: T
     c2 :: T
     c3 :: T
@@ -78,22 +95,24 @@ end
     c8 :: T
 end
 function BranchData{T}(
-    fbus::Int,
-    tbus::Int,
+    f_bus::Int,
+    t_bus::Int,
     br_r::T,
     br_x::T,
     b_fr::T,
     b_to::T,
     g_fr::T,
     g_to::T,
-    ratea::T,
-    rateb::T,
-    ratec::T,
+    rate_a::T,
+    rate_b::T,
+    rate_c::T,
     tap::T,
     shift::T,
     status::Int,
     angmin::T,
     angmax::T,
+    f_idx::Int,
+    t_idx::Int
 ) where {T<:Real}
     x = br_r + im * br_x
     xi = inv(x)
@@ -115,22 +134,24 @@ function BranchData{T}(
     c7 = (g + g_to)
     c8 = (b + b_to)
     BranchData{T}(
-        fbus,
-        tbus,
+        f_bus,
+        t_bus,
         br_r,
         br_x,
         b_fr,
         b_to,
         g_fr,
         g_to,
-        ratea,
-        rateb,
-        ratec,
+        rate_a,
+        rate_b,
+        rate_c,
         tap,
         shift,
         status,
         angmin,
         angmax,
+        f_idx,
+        t_idx,
         c1,
         c2,
         c3,
@@ -141,57 +162,19 @@ function BranchData{T}(
         c8,
     )
 end
-@doc """
-    struct BranchData{T <: Real}
-        fbus :: Int
-        tbus :: Int
-        br_r :: T
-        br_x :: T
-        b_fr :: T,
-        b_to :: T,
-        g_fr :: T,
-        g_to :: T,
-        ratea ::T
-        rateb :: T
-        ratec :: T
-        tap :: T
-        shift :: T
-        status :: Int
-        angmin :: T
-        angmax :: T
-        c1 :: T
-        c2 :: T
-        c3 :: T
-        c4 :: T
-        c5 :: T
-        c6 :: T
-        c7 :: T
-        c8 :: T
+
+"""
+    struct ArcData{T <: Real}
+        bus :: Int
+        rate_a :: T
     end
-
-fbus and tbus are indices into the PowerData.bus Vector, not bus_i values
-""" BranchData
-
-@as_nt struct StorageData{T <: Real}
-    storage_bus :: Int
-    ps :: T
-    qs :: T
-    energy :: T
-    energy_rating :: T
-    charge_rating :: T
-    discharge_rating :: T
-    charge_efficiency :: T
-    discharge_efficiency :: T
-    thermal_rating :: T
-    qmin :: T
-    qmax :: T
-    r :: T
-    x :: T
-    p_loss :: T
-    q_loss :: T
-    status :: Int
+"""
+struct ArcData{T <: Real}
+    bus :: Int
+    rate_a :: T
 end
-@doc """
+
+"""
     struct StorageData{T <: Real}
         storage_bus :: Int
         ps :: T
@@ -211,27 +194,28 @@ end
         q_loss :: T
         status :: Int
     end
-""" StorageData
-
-@as_nt struct GenData{T <: Real}
-    bus :: Int
-    pg :: T
-    qg :: T
-    qmax :: T
+"""
+struct StorageData{T <: Real}
+    storage_bus :: Int
+    ps :: T
+    qs :: T
+    energy :: T
+    energy_rating :: T
+    charge_rating :: T
+    discharge_rating :: T
+    charge_efficiency :: T
+    discharge_efficiency :: T
+    thermal_rating :: T
     qmin :: T
-    vg :: T
-    mbase :: T
+    qmax :: T
+    r :: T
+    x :: T
+    p_loss :: T
+    q_loss :: T
     status :: Int
-    pmax :: T
-    pmin :: T
-    i :: Int
-    model_poly :: Bool
-    startup :: T
-    shutdown :: T
-    n :: Int
-    c :: NTuple{3, T}
 end
-@doc """
+
+"""
     struct GenData{T <: Real}
         bus :: Int
         pg :: T
@@ -252,7 +236,25 @@ end
     end
 
 bus is an index into the PowerData.bus Vector, not bus_i values
-""" GenData
+"""
+struct GenData{T <: Real}
+    bus :: Int
+    pg :: T
+    qg :: T
+    qmax :: T
+    qmin :: T
+    vg :: T
+    mbase :: T
+    status :: Int
+    pmax :: T
+    pmin :: T
+    i :: Int
+    model_poly :: Bool
+    startup :: T
+    shutdown :: T
+    n :: Int
+    c :: NTuple{3, T}
+end
 
 """
     struct Data{T <: Real}
@@ -272,13 +274,15 @@ struct PowerData{
     VBusT <: AbstractVector{BusData{T}},
     VGenT <: AbstractVector{GenData{T}},
     VBranchT <: AbstractVector{BranchData{T}},
-    VStorageT <: AbstractVector{StorageData{T}}
+    VStorageT <: AbstractVector{StorageData{T}},
+    VArcT <: AbstractVector{ArcData{T}}
 }
     version :: String
     baseMVA :: T
     bus :: VBusT
     gen :: VGenT
     branch :: VBranchT
+    arc :: VArcT
     storage :: VStorageT
 end
 
@@ -377,6 +381,8 @@ end
     bus_map :: Vector{Int} = []
     bus_offset :: Int = 0
     line_ind = 0
+    num_bus = 0
+    cur_bus = 1
     for line in lines
         line_len = line.ncodeunits
         line_ind += 1
@@ -476,7 +482,10 @@ end
                     branch_words[11],
                     branch_words[12] / T(180.0) * T(pi),
                     branch_words[13] / T(180.0) * T(pi),
+                    cur_bus,
+                    cur_bus + num_bus
                 )
+                cur_bus += 1
             elseif cur_key == "storage"
                 storage_words = @iter_to_ntuple 17 WordedString(line, line_len) (Int, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, Int)
                 storage[row_num] = StorageData(
@@ -525,6 +534,7 @@ end
                 arr_len = get_arr_len(lines, num_lines, line_ind)
                 if cur_key == "bus"
                     bus = V{BusData{T}}(undef, arr_len)
+                    num_bus = arr_len
                 elseif cur_key == "gen"
                     gen = V{GenData{T}}(undef, arr_len)
                 elseif cur_key == "branch"
@@ -580,5 +590,12 @@ end
         end
     end
 
-    return PowerData(version, baseMVA, bus, gen, branch, storage)
+    num_branch = length(branch)
+    arc = V{ArcData{T}}(undef, num_branch * 2)
+    for (i, b) in enumerate(branch)
+        arc[i] = ArcData(i, b.rate_a)
+        arc[i+num_branch] = ArcData(i, b.rate_a)
+    end
+
+    return PowerData(version, baseMVA, bus, gen, branch, arc, storage)
 end

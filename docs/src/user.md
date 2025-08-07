@@ -10,6 +10,7 @@ ExaPowerIO.PowerData
 ExaPowerIO.BusData
 ExaPowerIO.GenData
 ExaPowerIO.BranchData
+ExaPowerIO.ArcData
 ExaPowerIO.StorageData
 ```
 

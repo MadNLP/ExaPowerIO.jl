@@ -24,7 +24,6 @@ function parse_matpower(
     ::Type{V},
     path :: String;
     library=nothing,
-    out_type=PowerData
 ) :: Union{NamedTuple, PowerData{T}} where {T<:Real, V<:AbstractVector}
     if library == :pglib
         PGLib_opf = joinpath(artifact"PGLib_opf", "pglib-opf-23.07")
@@ -34,14 +33,13 @@ function parse_matpower(
         path = joinpath(MATPOWER_opf, path)
     end
     isfile(path) || throw(error("Invalid file $path for library $library"))
-    data = parse_matpower_inner(T, V, path)
-    return convert(out_type, data)
+    return parse_matpower_inner(T, V, path)
 end
 
 parse_matpower(path; library=nothing) = parse_matpower(Float64, Vector, path; library)
 parse_matpower(::Type{T}, path; library=nothing) where {T<:Real} = parse_matpower(T, Vector, path; library)
 parse_matpower(::Type{V}, path; library=nothing) where {V<:Vector} = parse_matpower(Float64, V, path; library)
 
-export parse_matpower, PowerData, BusData, GenData, BranchData, StorageData
+export parse_matpower, PowerData, BusData, GenData, BranchData, ArcData, StorageData
 
 end # module ExaPowerIO
