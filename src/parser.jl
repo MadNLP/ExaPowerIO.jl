@@ -593,8 +593,8 @@ end
     num_branch = length(branch)
     arc = V{ArcData{T}}(undef, num_branch * 2)
     for (i, b) in enumerate(branch)
-        arc[i] = ArcData(i, b.rate_a)
-        arc[i+num_branch] = ArcData(i, b.rate_a)
+        arc[i] = ArcData(b.f_bus, b.rate_a)
+        arc[i+num_branch] = ArcData(b.t_bus, b.rate_a)
     end
 
     return PowerData(version, baseMVA, bus, gen, branch, arc, storage)
