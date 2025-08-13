@@ -381,8 +381,8 @@ end
     bus_map :: Vector{Int} = []
     bus_offset :: Int = 0
     line_ind = 0
-    num_bus = 0
-    cur_bus = 1
+    num_branch = 0
+    cur_branch = 1
     for line in lines
         line_len = line.ncodeunits
         line_ind += 1
@@ -482,10 +482,10 @@ end
                     branch_words[11],
                     branch_words[12] / T(180.0) * T(pi),
                     branch_words[13] / T(180.0) * T(pi),
-                    cur_bus,
-                    cur_bus + num_bus
+                    cur_branch,
+                    cur_branch + num_branch
                 )
-                cur_bus += 1
+                cur_branch += 1
             elseif cur_key == "storage"
                 storage_words = @iter_to_ntuple 17 WordedString(line, line_len) (Int, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, Int)
                 storage[row_num] = StorageData(
@@ -534,11 +534,11 @@ end
                 arr_len = get_arr_len(lines, num_lines, line_ind)
                 if cur_key == "bus"
                     bus = V{BusData{T}}(undef, arr_len)
-                    num_bus = arr_len
                 elseif cur_key == "gen"
                     gen = V{GenData{T}}(undef, arr_len)
                 elseif cur_key == "branch"
                     branch = V{BranchData{T}}(undef, arr_len)
+                    num_branch = arr_len
                 elseif cur_key == "storage"
                     storage = V{StorageData{T}}(undef, arr_len)
                 end
