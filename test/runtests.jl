@@ -1,6 +1,6 @@
 using ExaPowerIO, Test, PowerModels, PGLib
 
-CASES = ["pglib_opf_case3_lmbd.m"]
+CASES = PGLib.find_pglib_case("")
 
 PowerModels.silence()
 
