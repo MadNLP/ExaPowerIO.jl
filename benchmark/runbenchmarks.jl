@@ -1,8 +1,4 @@
-using BenchmarkTools, PowerModels, PGLib, Profile, PProf, Logging, JLD2, Pkg
-
-Pkg.activate("..")
-
-using ExaPowerIO
+using ExaPowerIO, BenchmarkTools, PowerModels, PGLib, Profile, PProf, Logging, JLD2, Pkg
 
 PowerModels.silence()
 
