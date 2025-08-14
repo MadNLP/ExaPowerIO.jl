@@ -502,7 +502,7 @@ end
             if in_array
                 row_num += 1
             end
-        elseif !startswith(line, "function") && line_len > 0
+        elseif !startswith(line, "function") && line_len > 0 && isletter(line[1])
             cur_key = ""
             for key in MATPOWER_KEYS
                 full_name = "mpc.$key"
