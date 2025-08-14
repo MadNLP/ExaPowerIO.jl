@@ -45,7 +45,16 @@ jobs:
 
       - name: Run tests
         run: |
-          julia --project=. -e 'using Pkg; Pkg.test()'
+          julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
+
+      - uses: julia-actions/julia-processcoverage@v1
+        with:
+          directories: src
+
+      - uses: codecov/codecov-action@v5
+        with:
+          file: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   test-self-hosted:
     runs-on: self-hosted
@@ -81,4 +90,13 @@ jobs:
 
       - name: Run tests
         run: |
-          julia --project=. -e 'using Pkg; Pkg.test()'
+          julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
+
+      - uses: julia-actions/julia-processcoverage@v1
+        with:
+          directories: src
+
+      - uses: codecov/codecov-action@v5
+        with:
+          file: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}

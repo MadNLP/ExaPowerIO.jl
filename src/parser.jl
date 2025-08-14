@@ -1,39 +1,7 @@
 # FOR CONVENIENCE, the MATPOWER file spec
 # https://matpower.app/manual/matpower/DataFileFormat.html
 
-macro as_nt(struct_expr)
-    if struct_expr.head != :struct
-        error("@to_namedtuple must be applied to a struct definition")
-    end
-    struct_name = struct_expr.args[2] isa Symbol ? struct_expr.args[2] : struct_expr.args[2].args[1]
-    nt_expr = Expr(:tuple)
-    for line in filter(child -> child isa Expr, struct_expr.args[3].args)
-        push!(nt_expr.args, Expr(:(=), line.args[1], Expr(:., :obj, QuoteNode(line.args[1]))))
-    end
-    return esc(quote
-        $struct_expr
-        function struct_to_nt(obj::$struct_name{T})::NamedTuple where {T<:Real}
-            $nt_expr
-        end
-    end)
-end
-
-@as_nt struct BusData{T <: Real}
-    bus_i :: Int
-    type :: Int
-    pd :: T
-    qd :: T
-    gs :: T
-    bs :: T
-    area :: Int
-    vm :: T
-    va :: T
-    baseKV :: T
-    zone :: Int
-    vmax :: T
-    vmin :: T
-end
-@doc """
+"""
     struct BusData{T <: Real}
         bus_i :: Int
         type :: Int
@@ -49,25 +17,74 @@ end
         vmax :: T
         vmin :: T
     end
-""" BusData
+"""
+struct BusData{T <: Real}
+    bus_i :: Int
+    type :: Int
+    pd :: T
+    qd :: T
+    gs :: T
+    bs :: T
+    area :: Int
+    vm :: T
+    va :: T
+    baseKV :: T
+    zone :: Int
+    vmax :: T
+    vmin :: T
+end
 
-@as_nt struct BranchData{T <: Real}
-    fbus :: Int
-    tbus :: Int
+"""
+    struct BranchData{T <: Real}
+        f_bus :: Int
+        t_bus :: Int
+        br_r :: T
+        br_x :: T
+        b_fr :: T,
+        b_to :: T,
+        g_fr :: T,
+        g_to :: T,
+        rate_a ::T
+        rate_b :: T
+        rate_c :: T
+        tap :: T
+        shift :: T
+        status :: Int
+        angmin :: T
+        angmax :: T
+        f_idx::Int
+        t_idx::Int
+        c1 :: T
+        c2 :: T
+        c3 :: T
+        c4 :: T
+        c5 :: T
+        c6 :: T
+        c7 :: T
+        c8 :: T
+    end
+
+f_bus and t_bus are indices into the PowerData.bus Vector, not bus_i values
+"""
+struct BranchData{T <: Real}
+    f_bus :: Int
+    t_bus :: Int
     br_r :: T
     br_x :: T
     b_fr :: T
     b_to :: T
     g_fr :: T
     g_to :: T
-    ratea ::T
-    rateb :: T
-    ratec :: T
+    rate_a ::T
+    rate_b :: T
+    rate_c :: T
     tap :: T
     shift :: T
     status :: Int
     angmin :: T
     angmax :: T
+    f_idx::Int
+    t_idx::Int
     c1 :: T
     c2 :: T
     c3 :: T
@@ -78,22 +95,24 @@ end
     c8 :: T
 end
 function BranchData{T}(
-    fbus::Int,
-    tbus::Int,
+    f_bus::Int,
+    t_bus::Int,
     br_r::T,
     br_x::T,
     b_fr::T,
     b_to::T,
     g_fr::T,
     g_to::T,
-    ratea::T,
-    rateb::T,
-    ratec::T,
+    rate_a::T,
+    rate_b::T,
+    rate_c::T,
     tap::T,
     shift::T,
     status::Int,
     angmin::T,
     angmax::T,
+    f_idx::Int,
+    t_idx::Int
 ) where {T<:Real}
     x = br_r + im * br_x
     xi = inv(x)
@@ -115,22 +134,24 @@ function BranchData{T}(
     c7 = (g + g_to)
     c8 = (b + b_to)
     BranchData{T}(
-        fbus,
-        tbus,
+        f_bus,
+        t_bus,
         br_r,
         br_x,
         b_fr,
         b_to,
         g_fr,
         g_to,
-        ratea,
-        rateb,
-        ratec,
+        rate_a,
+        rate_b,
+        rate_c,
         tap,
         shift,
         status,
         angmin,
         angmax,
+        f_idx,
+        t_idx,
         c1,
         c2,
         c3,
@@ -141,60 +162,22 @@ function BranchData{T}(
         c8,
     )
 end
-@doc """
-    struct BranchData{T <: Real}
-        fbus :: Int
-        tbus :: Int
-        br_r :: T
-        br_x :: T
-        b_fr :: T,
-        b_to :: T,
-        g_fr :: T,
-        g_to :: T,
-        ratea ::T
-        rateb :: T
-        ratec :: T
-        tap :: T
-        shift :: T
-        status :: Int
-        angmin :: T
-        angmax :: T
-        c1 :: T
-        c2 :: T
-        c3 :: T
-        c4 :: T
-        c5 :: T
-        c6 :: T
-        c7 :: T
-        c8 :: T
+
+"""
+    struct ArcData{T <: Real}
+        bus :: Int
+        rate_a :: T
     end
-
-fbus and tbus are indices into the PowerData.bus Vector, not bus_i values
-""" BranchData
-
-@as_nt struct StorageData{T <: Real}
-    storage_bus :: T
-    ps :: Int
-    qs :: T
-    energy :: T
-    energy_rating :: T
-    charge_rating :: T
-    discharge_rating :: T
-    charge_efficiency :: T
-    discharge_efficiency :: T
-    thermal_rating :: T
-    qmin :: T
-    qmax :: T
-    r :: T
-    x :: T
-    p_loss :: T
-    q_loss :: T
-    status :: Int
+"""
+struct ArcData{T <: Real}
+    bus :: Int
+    rate_a :: T
 end
-@doc """
+
+"""
     struct StorageData{T <: Real}
-        storage_bus :: T
-        ps :: Int
+        storage_bus :: Int
+        ps :: T
         qs :: T
         energy :: T
         energy_rating :: T
@@ -211,27 +194,28 @@ end
         q_loss :: T
         status :: Int
     end
-""" StorageData
-
-@as_nt struct GenData{T <: Real}
-    bus :: Int
-    pg :: T
-    qg :: T
-    qmax :: T
+"""
+struct StorageData{T <: Real}
+    storage_bus :: Int
+    ps :: T
+    qs :: T
+    energy :: T
+    energy_rating :: T
+    charge_rating :: T
+    discharge_rating :: T
+    charge_efficiency :: T
+    discharge_efficiency :: T
+    thermal_rating :: T
     qmin :: T
-    vg :: T
-    mbase :: T
+    qmax :: T
+    r :: T
+    x :: T
+    p_loss :: T
+    q_loss :: T
     status :: Int
-    pmax :: T
-    pmin :: T
-    i :: Int
-    model_poly :: Bool
-    startup :: T
-    shutdown :: T
-    n :: Int
-    c :: NTuple{3, T}
 end
-@doc """
+
+"""
     struct GenData{T <: Real}
         bus :: Int
         pg :: T
@@ -243,7 +227,6 @@ end
         status :: Int
         pmax :: T
         pmin :: T
-        i :: Int
         model_poly :: Bool
         startup :: T
         shutdown :: T
@@ -252,7 +235,24 @@ end
     end
 
 bus is an index into the PowerData.bus Vector, not bus_i values
-""" GenData
+"""
+struct GenData{T <: Real}
+    bus :: Int
+    pg :: T
+    qg :: T
+    qmax :: T
+    qmin :: T
+    vg :: T
+    mbase :: T
+    status :: Int
+    pmax :: T
+    pmin :: T
+    model_poly :: Bool
+    startup :: T
+    shutdown :: T
+    n :: Int
+    c :: NTuple{3, T}
+end
 
 """
     struct Data{T <: Real}
@@ -272,25 +272,16 @@ struct PowerData{
     VBusT <: AbstractVector{BusData{T}},
     VGenT <: AbstractVector{GenData{T}},
     VBranchT <: AbstractVector{BranchData{T}},
-    VStorageT <: AbstractVector{StorageData{T}}
+    VStorageT <: AbstractVector{StorageData{T}},
+    VArcT <: AbstractVector{ArcData{T}}
 }
     version :: String
     baseMVA :: T
     bus :: VBusT
     gen :: VGenT
     branch :: VBranchT
+    arc :: VArcT
     storage :: VStorageT
-end
-
-function struct_to_nt(data::PowerData)
-    (
-        version = data.version,
-        baseMVA = data.baseMVA,
-        bus = struct_to_nt.(data.bus),
-        gen = struct_to_nt.(data.gen),
-        branch = struct_to_nt.(data.branch),
-        storage = struct_to_nt.(data.storage),
-    )
 end
 
 const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "areas", "bus", "gencost", "gen", "branch", "storage"];
@@ -360,7 +351,7 @@ function get_arr_len(lines :: Vector{SubString{String}}, num_lines::Int, start::
     error("Array defined on line $start was not closed")
 end
 
-@inbounds @inline @views function parse_matpower(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
+@inbounds @inline @views function parse_matpower_inner(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
     fstring = read(open(fname), String)
     lines = split(fstring, "\n")
     in_array = false
@@ -377,6 +368,10 @@ end
     bus_map :: Vector{Int} = []
     bus_offset :: Int = 0
     line_ind = 0
+    num_branch = 0
+    cur_branch = 1
+    biggest_gen = -1
+    biggest_gen_pmax = -Inf
     for line in lines
         line_len = line.ncodeunits
         line_ind += 1
@@ -399,8 +394,8 @@ end
                     bus_words[2],
                     bus_words[3] / baseMVA,
                     bus_words[4] / baseMVA,
-                    bus_words[5],
-                    bus_words[6],
+                    bus_words[5] / baseMVA,
+                    bus_words[6] / baseMVA,
                     bus_words[7],
                     bus_words[8],
                     bus_words[9],
@@ -411,6 +406,10 @@ end
                 )
             elseif cur_key == "gen"
                 gen_words = @iter_to_ntuple 10 WordedString(line, line_len) (Int, T, T, T, T, T, T, Int, T, T)
+                if gen_words[8] != 0 && gen_words[10] > biggest_gen_pmax
+                    biggest_gen_pmax = gen_words[10]
+                    biggest_gen = row_num
+                end
                 gen[row_num] = GenData(
                     bus_map[gen_words[1] - bus_offset],
                     gen_words[2] / baseMVA,
@@ -422,7 +421,6 @@ end
                     gen_words[8],
                     gen_words[9] / baseMVA,
                     gen_words[10] / baseMVA,
-                    row_num,
                     false,
                     T(0),
                     T(0),
@@ -450,7 +448,6 @@ end
                     gen[row_num].status,
                     gen[row_num].pmax,
                     gen[row_num].pmin,
-                    row_num,
                     model_poly,
                     genc_words[2],
                     genc_words[3],
@@ -476,22 +473,25 @@ end
                     branch_words[11],
                     branch_words[12] / T(180.0) * T(pi),
                     branch_words[13] / T(180.0) * T(pi),
+                    cur_branch,
+                    cur_branch + num_branch
                 )
+                cur_branch += 1
             elseif cur_key == "storage"
-                storage_words = @iter_to_ntuple 17 WordedString(line, line_len) (T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T)
+                storage_words = @iter_to_ntuple 17 WordedString(line, line_len) (Int, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, Int)
                 storage[row_num] = StorageData(
                     storage_words[1],
                     storage_words[2],
                     storage_words[3],
-                    storage_words[4],
-                    storage_words[5],
-                    storage_words[6],
-                    storage_words[7],
+                    storage_words[4] / baseMVA,
+                    storage_words[5] / baseMVA,
+                    storage_words[6] / baseMVA,
+                    storage_words[7] / baseMVA,
                     storage_words[8],
                     storage_words[9],
-                    storage_words[10],
-                    storage_words[11],
-                    storage_words[12],
+                    storage_words[10] / baseMVA,
+                    storage_words[11] / baseMVA,
+                    storage_words[12] / baseMVA,
                     storage_words[13],
                     storage_words[14],
                     storage_words[15],
@@ -502,7 +502,7 @@ end
             if in_array
                 row_num += 1
             end
-        elseif !startswith(line, "function") && line_len > 0
+        elseif !startswith(line, "function") && line_len > 0 && isletter(line[1])
             cur_key = ""
             for key in MATPOWER_KEYS
                 full_name = "mpc.$key"
@@ -513,7 +513,8 @@ end
             end
 
             if cur_key == ""
-                error("Error parsing data. Invalid variable assignment on line $(line_ind).")
+                @info [c for c in line]
+                error("Error parsing data. Invalid variable assignment on line $(line_ind).\n\t$line")
             end
             if cur_key == "version"
                 raw_data = split(line)[3]
@@ -529,6 +530,7 @@ end
                     gen = V{GenData{T}}(undef, arr_len)
                 elseif cur_key == "branch"
                     branch = V{BranchData{T}}(undef, arr_len)
+                    num_branch = arr_len
                 elseif cur_key == "storage"
                     storage = V{StorageData{T}}(undef, arr_len)
                 end
@@ -539,6 +541,7 @@ end
     end
 
     has_gen = [false for _ in 1:length(bus)]
+    look_for_ref = false
     for gen in gen
         if gen.status == 1
             has_gen[gen.bus] = true
@@ -561,7 +564,10 @@ end
                 b.vmax,
                 b.vmin
             )
-        elseif !has_gen[i] && b.type == 2
+        elseif !has_gen[i] && (b.type == 2 || b.type == 3)
+            if bus[i].type == 3
+                look_for_ref = true
+            end
             bus[i] = BusData(
                 b.bus_i,
                 1,
@@ -579,6 +585,31 @@ end
             )
         end
     end
+    if look_for_ref
+        b = bus[gen[biggest_gen].bus]
+        bus[gen[biggest_gen].bus] = BusData(
+            b.bus_i,
+            3,
+            b.pd,
+            b.qd,
+            b.gs,
+            b.bs,
+            b.area,
+            b.vm,
+            b.va,
+            b.baseKV,
+            b.zone,
+            b.vmax,
+            b.vmin
+        )
+    end
 
-    return PowerData(version, baseMVA, bus, gen, branch, storage)
+    num_branch = length(branch)
+    arc = V{ArcData{T}}(undef, num_branch * 2)
+    for (i, b) in enumerate(branch)
+        arc[i] = ArcData(b.f_bus, b.rate_a)
+        arc[i+num_branch] = ArcData(b.t_bus, b.rate_a)
+    end
+
+    return PowerData(version, baseMVA, bus, gen, branch, arc, storage)
 end
