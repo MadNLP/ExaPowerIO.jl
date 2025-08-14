@@ -227,7 +227,6 @@ end
         status :: Int
         pmax :: T
         pmin :: T
-        i :: Int
         model_poly :: Bool
         startup :: T
         shutdown :: T
@@ -248,7 +247,6 @@ struct GenData{T <: Real}
     status :: Int
     pmax :: T
     pmin :: T
-    i :: Int
     model_poly :: Bool
     startup :: T
     shutdown :: T
@@ -284,17 +282,6 @@ struct PowerData{
     branch :: VBranchT
     arc :: VArcT
     storage :: VStorageT
-end
-
-function struct_to_nt(data::PowerData)
-    (
-        version = data.version,
-        baseMVA = data.baseMVA,
-        bus = struct_to_nt.(data.bus),
-        gen = struct_to_nt.(data.gen),
-        branch = struct_to_nt.(data.branch),
-        storage = struct_to_nt.(data.storage),
-    )
 end
 
 const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "areas", "bus", "gencost", "gen", "branch", "storage"];
@@ -383,6 +370,8 @@ end
     line_ind = 0
     num_branch = 0
     cur_branch = 1
+    biggest_gen = -1
+    biggest_gen_pmax = -Inf
     for line in lines
         line_len = line.ncodeunits
         line_ind += 1
@@ -405,8 +394,8 @@ end
                     bus_words[2],
                     bus_words[3] / baseMVA,
                     bus_words[4] / baseMVA,
-                    bus_words[5],
-                    bus_words[6],
+                    bus_words[5] / baseMVA,
+                    bus_words[6] / baseMVA,
                     bus_words[7],
                     bus_words[8],
                     bus_words[9],
@@ -417,6 +406,10 @@ end
                 )
             elseif cur_key == "gen"
                 gen_words = @iter_to_ntuple 10 WordedString(line, line_len) (Int, T, T, T, T, T, T, Int, T, T)
+                if gen_words[8] != 0 && gen_words[10] > biggest_gen_pmax
+                    biggest_gen_pmax = gen_words[10]
+                    biggest_gen = row_num
+                end
                 gen[row_num] = GenData(
                     bus_map[gen_words[1] - bus_offset],
                     gen_words[2] / baseMVA,
@@ -428,7 +421,6 @@ end
                     gen_words[8],
                     gen_words[9] / baseMVA,
                     gen_words[10] / baseMVA,
-                    row_num,
                     false,
                     T(0),
                     T(0),
@@ -456,7 +448,6 @@ end
                     gen[row_num].status,
                     gen[row_num].pmax,
                     gen[row_num].pmin,
-                    row_num,
                     model_poly,
                     genc_words[2],
                     genc_words[3],
@@ -549,6 +540,7 @@ end
     end
 
     has_gen = [false for _ in 1:length(bus)]
+    look_for_ref = false
     for gen in gen
         if gen.status == 1
             has_gen[gen.bus] = true
@@ -571,7 +563,10 @@ end
                 b.vmax,
                 b.vmin
             )
-        elseif !has_gen[i] && b.type == 2
+        elseif !has_gen[i] && (b.type == 2 || b.type == 3)
+            if bus[i].type == 3
+                look_for_ref = true
+            end
             bus[i] = BusData(
                 b.bus_i,
                 1,
@@ -588,6 +583,24 @@ end
                 b.vmin
             )
         end
+    end
+    if look_for_ref
+        b = bus[gen[biggest_gen].bus]
+        bus[gen[biggest_gen].bus] = BusData(
+            b.bus_i,
+            3,
+            b.pd,
+            b.qd,
+            b.gs,
+            b.bs,
+            b.area,
+            b.vm,
+            b.va,
+            b.baseKV,
+            b.zone,
+            b.vmax,
+            b.vmin
+        )
     end
 
     num_branch = length(branch)
