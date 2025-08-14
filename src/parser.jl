@@ -513,6 +513,7 @@ end
             end
 
             if cur_key == ""
+                @info [c for c in line]
                 error("Error parsing data. Invalid variable assignment on line $(line_ind).\n\t$line")
             end
             if cur_key == "version"
