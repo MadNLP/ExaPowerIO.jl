@@ -8,6 +8,7 @@ lazy = true
 
 [MATPOWER_opf]
 git-tree-sha1 = "35edb1c65b12acaa03a87dae8a38b2fe6eff41d2"
+lazy = true
 
     [[MATPOWER_opf.download]]
     sha256 = "5f08ced1a32e8d0d658ee54b73678c7364a899bae479882f2bc419e91442b69f"
