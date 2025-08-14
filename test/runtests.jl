@@ -12,8 +12,8 @@ Memento.log(handler::StorageHandler, record::Memento.Record) = push!(handler.rec
     s = s[1:findfirst(c -> !isdigit(c), s)-1]
     return parse(Int, s)
 end
-const CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
-@info CASES
+const PGLIB_CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
+const FILE_CASES = ["../data/pglib_opf_case3_lmbd_mod.m", "../data/pglib_opf_case5_pjm_mod.m"]
 
 # this is copied from the old parser.jl
 # power models filters out inactive branches
@@ -98,8 +98,7 @@ function parse_pm(filename, num_branch)
         storage = isempty(ref[:storage]) ?  empty_data = Dict{Int, NamedTuple{(:i,), Tuple{Int64}}}() : Dict(
             begin
                 i => (;:c => i,
-                :bus => stor["storage_bus"],
-                (Symbol(s) = stor[s] for s in ["energy", "energy_rating", "charge_rating", "discharge_rating", "discharge_efficiency", "thermal_rating", "charge_efficiency", "qmix", "qmax", "r", "x", "p_loss", "q_loss", "ps", "qs"])...,
+                (Symbol(s) => stor[s] for s in ["storage_bus", "energy", "energy_rating", "charge_rating", "discharge_rating", "discharge_efficiency", "thermal_rating", "charge_efficiency", "qmin", "qmax", "r", "x", "p_loss", "q_loss", "ps", "qs", "status"])...,
                )
             end for (i, stor) in ref[:storage]
         ),
@@ -119,125 +118,132 @@ function compare_fields(lhs::L, rhs::R, fields) where {L,R}
     end
 end
 
+function test_case(ep_output, pm_output, handler, dataset)
+    # when the reference bus gets changed, and there is a tie in pmax, the new ref is unknown
+    if any(map(r -> occursin("as reference based on generator", r), handler.records))
+        @info "Skipping case $dataset due to changed reference bus"
+        return
+    end
+    @test pm_output.version == ep_output.version
+    @test isapprox(pm_output.baseMVA, ep_output.baseMVA)
+    for (i, ep_bus) in enumerate(ep_output.bus)
+        ep_bus.type == 4 && continue
+        pm_bus = pm_output.bus[ep_bus.bus_i]
+        compare_fields(ep_bus, pm_bus, fieldnames(ExaPowerIO.BusData))
+    end
+    for (i, ep_gen) in enumerate(ep_output.gen)
+        ep_gen.status == 0 && continue
+        pm_gen = pm_output.gen[i]
+        compare_fields(ep_gen, pm_gen, [
+            :pg,
+            :qg,
+            :qmax,
+            :qmin,
+            :vg,
+            :mbase,
+            :status,
+            :pmax,
+            :pmin,
+            :model_poly,
+            :startup,
+            :shutdown,
+            :n,
+            :c
+        ])
+        @test ep_output.bus[ep_gen.bus].bus_i == pm_gen.bus
+    end
+    for (i, ep_branch) in enumerate(ep_output.branch)
+        ep_branch.status == 0 && continue
+        pm_branch = pm_output.branch[i]
+        ep_tbus = ep_output.bus[ep_branch.t_bus].bus_i
+        ep_fbus = ep_output.bus[ep_branch.f_bus].bus_i
+        if pm_branch.f_bus == ep_tbus && pm_branch.t_bus == ep_fbus
+            ep_branch = BranchData{Float64}(
+                ep_branch.t_bus,
+                ep_branch.f_bus,
+                ep_branch.br_r * ep_branch.tap^2,
+                ep_branch.br_x * ep_branch.tap^2,
+                ep_branch.b_to / ep_branch.tap^2,
+                ep_branch.b_fr * ep_branch.tap^2,
+                ep_branch.g_to / ep_branch.tap^2,
+                ep_branch.g_fr * ep_branch.tap^2,
+                ep_branch.rate_a,
+                ep_branch.rate_b,
+                ep_branch.rate_c,
+                1 / ep_branch.tap,
+                -ep_branch.shift,
+                ep_branch.status,
+                -ep_branch.angmax,
+                -ep_branch.angmin,
+                # we arent using pm arc calculations so no need to flip
+                ep_branch.f_idx,
+                ep_branch.t_idx
+            )
+            ep_output.arc[i], ep_output.arc[i+length(ep_output.branch)] = ep_output.arc[i+length(ep_output.branch)], ep_output.arc[i]
+            ep_tbus = ep_output.bus[ep_branch.t_bus].bus_i
+            ep_fbus = ep_output.bus[ep_branch.f_bus].bus_i
+        end
+        compare_fields(ep_branch, pm_branch, [
+            :br_r,
+            :br_x,
+            :b_fr,
+            :b_to,
+            :g_fr,
+            :g_to,
+            :rate_a,
+            :rate_b,
+            :rate_c,
+            :tap,
+            :shift,
+            :status,
+            :angmin,
+            :angmax,
+            :f_idx,
+            :t_idx,
+            :c1,
+            :c2,
+            :c3,
+            :c4,
+            :c5,
+            :c6,
+            :c7,
+            :c8,
+        ])
+        @test ep_fbus == pm_branch.f_bus
+        @test ep_tbus == pm_branch.t_bus
+    end
+    for (i, ep_arc) in enumerate(ep_output.arc)
+        # powermodels skips inactive branches
+        haskey(pm_output.arc, i) || continue
+        pm_arc = pm_output.arc[i]
+        compare_fields(ep_arc, pm_arc, [:rate_a])
+        @test ep_output.bus[ep_arc.bus].bus_i == pm_arc.bus
+    end
+    for (i, ep_storage) in enumerate(ep_output.storage)
+        pm_storage = pm_output.storage[i]
+        compare_fields(ep_storage, pm_storage, fieldnames(ExaPowerIO.StorageData))
+    end
+end
+
 @testset "ExaPowerIO parsing tests" begin
     root_logger = getlogger("")
     handler = StorageHandler{DefaultFormatter}()
     root_logger.handlers = Dict("storage_logger" => handler)
 
-    datadir = "../data/"
-    for dataset in CASES
+    for dataset in FILE_CASES
+        handler.records = []
+        @info "Testing with dataset: $dataset"
+        ep_output = ExaPowerIO.parse_matpower(dataset)
+        pm_output = parse_pm(dataset, length(ep_output.branch))
+        test_case(ep_output, pm_output, handler, dataset)
+    end
+    for dataset in PGLIB_CASES
         handler.records = []
         path = joinpath(PGLib.PGLib_opf, dataset)
         @info "Testing with dataset: $dataset"
-        @info path
         ep_output = ExaPowerIO.parse_matpower(dataset; library=:pglib)
         pm_output = parse_pm(path, length(ep_output.branch))
-
-        # when the reference bus gets changed, and there is a tie in pmax, the new ref is unknown
-        if any(map(r -> occursin("as reference based on generator", r), handler.records))
-            @info "Skipping case $dataset due to changed reference bus"
-            continue
-        end
-
-        @test pm_output.version == ep_output.version
-        @test isapprox(pm_output.baseMVA, ep_output.baseMVA)
-        for (i, ep_bus) in enumerate(ep_output.bus)
-            ep_bus.type == 4 && continue
-            pm_bus = pm_output.bus[ep_bus.bus_i]
-            compare_fields(ep_bus, pm_bus, fieldnames(ExaPowerIO.BusData))
-        end
-        for (i, ep_gen) in enumerate(ep_output.gen)
-            ep_gen.status == 0 && continue
-            pm_gen = pm_output.gen[i]
-            compare_fields(ep_gen, pm_gen, [
-                :pg,
-                :qg,
-                :qmax,
-                :qmin,
-                :vg,
-                :mbase,
-                :status,
-                :pmax,
-                :pmin,
-                :model_poly,
-                :startup,
-                :shutdown,
-                :n,
-                :c
-            ])
-            @test ep_output.bus[ep_gen.bus].bus_i == pm_gen.bus
-        end
-        for (i, ep_branch) in enumerate(ep_output.branch)
-            ep_branch.status == 0 && continue
-            pm_branch = pm_output.branch[i]
-            ep_tbus = ep_output.bus[ep_branch.t_bus].bus_i
-            ep_fbus = ep_output.bus[ep_branch.f_bus].bus_i
-            if pm_branch.f_bus == ep_tbus && pm_branch.t_bus == ep_fbus
-                ep_branch = BranchData{Float64}(
-                    ep_branch.t_bus,
-                    ep_branch.f_bus,
-                    ep_branch.br_r * ep_branch.tap^2,
-                    ep_branch.br_x * ep_branch.tap^2,
-                    ep_branch.b_to / ep_branch.tap^2,
-                    ep_branch.b_fr * ep_branch.tap^2,
-                    ep_branch.g_to / ep_branch.tap^2,
-                    ep_branch.g_fr * ep_branch.tap^2,
-                    ep_branch.rate_a,
-                    ep_branch.rate_b,
-                    ep_branch.rate_c,
-                    1 / ep_branch.tap,
-                    -ep_branch.shift,
-                    ep_branch.status,
-                    -ep_branch.angmax,
-                    -ep_branch.angmin,
-                    # we arent using pm arc calculations so no need to flip
-                    ep_branch.f_idx,
-                    ep_branch.t_idx
-                )
-                ep_output.arc[i], ep_output.arc[i+length(ep_output.branch)] = ep_output.arc[i+length(ep_output.branch)], ep_output.arc[i]
-                ep_tbus = ep_output.bus[ep_branch.t_bus].bus_i
-                ep_fbus = ep_output.bus[ep_branch.f_bus].bus_i
-            end
-            compare_fields(ep_branch, pm_branch, [
-                :br_r,
-                :br_x,
-                :b_fr,
-                :b_to,
-                :g_fr,
-                :g_to,
-                :rate_a,
-                :rate_b,
-                :rate_c,
-                :tap,
-                :shift,
-                :status,
-                :angmin,
-                :angmax,
-                :f_idx,
-                :t_idx,
-                :c1,
-                :c2,
-                :c3,
-                :c4,
-                :c5,
-                :c6,
-                :c7,
-                :c8,
-            ])
-            @test ep_fbus == pm_branch.f_bus
-            @test ep_tbus == pm_branch.t_bus
-        end
-        for (i, ep_arc) in enumerate(ep_output.arc)
-            # powermodels skips inactive branches
-            haskey(pm_output.arc, i) || continue
-            pm_arc = pm_output.arc[i]
-            compare_fields(ep_arc, pm_arc, [:rate_a])
-            @test ep_output.bus[ep_arc.bus].bus_i == pm_arc.bus
-        end
-        for (i, ep_storage) in enumerate(ep_output.storage)
-            pm_storage = pm_output.storage[i]
-            compare_fields(ep_storage, pm_storage, fieldnames(ExaPowerIO.StorageData))
-        end
+        test_case(ep_output, pm_output, handler, dataset)
     end
 end
 
