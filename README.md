@@ -6,7 +6,7 @@ ExaPowerIO is a minimal IO library for the [Matpower](https://matpower.app/manua
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![doc](https://img.shields.io/badge/docs-stable-blue.svg)](https://madsuite.org/ExaPowerIO.jl/stable) 
 [![doc](https://img.shields.io/badge/docs-dev-blue.svg)](https://madsuite.org/ExaPowerIO.jl/dev) 
-[![coverage](https://codecov.io/gh/MadNLP/ExaPowerIO.jl/branch/main/graph/badge.svg?token=MBxH2AAu8Z)]
+[![codecov](https://codecov.io/gh/MadNLP/ExaPowerIO.jl/graph/badge.svg?token=K5h7QkiI2g)](https://codecov.io/gh/MadNLP/ExaPowerIO.jl)
 
 DICLAIMER: ExaPowerIO is in active development. There may be missing features, documentation, or other issues.
 If you experience any of these, please open [Issues](https://github.com/MadNLP/ExaPowerIO.jl/issues), or [Pull Requests](https://github.com/MadNLP/ExaPowerIO.jl/pulls)
