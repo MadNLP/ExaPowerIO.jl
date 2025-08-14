@@ -513,7 +513,7 @@ end
             end
 
             if cur_key == ""
-                error("Error parsing data. Invalid variable assignment on line $(line_ind).")
+                error("Error parsing data. Invalid variable assignment on line $(line_ind).\n\t$line")
             end
             if cur_key == "version"
                 raw_data = split(line)[3]
