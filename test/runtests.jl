@@ -1,106 +1,249 @@
-using ExaPowerIO, Test, PowerModels, PGLib
+using ExaPowerIO, Test, PowerModels, PGLib, Memento
 
-CASES = PGLib.find_pglib_case("")
+mutable struct StorageHandler{F} <: Handler{F}
+    records::Vector{String}
+    StorageHandler{F}() where F = new{F}([])
+end
 
-PowerModels.silence()
+Memento.log(handler::StorageHandler, record::Memento.Record) = push!(handler.records, record.msg)
+
+@views function pglib_num_buses(s::String)
+    s = s[length("pglib_opf_case")+1:end]
+    s = s[1:findfirst(c -> !isdigit(c), s)-1]
+    return parse(Int, s)
+end
+const PGLIB_CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
+const FILE_CASES = ["../data/pglib_opf_case3_lmbd_mod.m", "../data/pglib_opf_case5_pjm_mod.m"]
+
+# this is copied from the old parser.jl
+# power models filters out inactive branches
+function parse_pm(filename, num_branch)
+    data = PowerModels.parse_file(filename)
+    PowerModels.standardize_cost_terms!(data, order = 2)
+    PowerModels.calc_thermal_limits!(data)
+
+    ref = PowerModels.build_ref(data)[:it][:pm][:nw][0]
+
+    arc = Dict()
+    for (i, b) in ref[:branch]
+        merge!(arc, Dict(i => (;:bus => b["f_bus"], :rate_a => b["rate_a"],),
+                                 (i+num_branch) => (;:bus => b["t_bus"], :rate_a => b["rate_a"],)))
+    end
+
+    data =  (
+        version = ref[:source_version],
+        baseMVA = ref[:baseMVA],
+        bus = Dict(
+            begin
+                bus_loads = [ref[:load][l] for l in ref[:bus_loads][k]]
+                bus_shunts = [ref[:shunt][s] for s in ref[:bus_shunts][k]]
+                k => (;
+                 :pd => sum(load["pd"] for load in bus_loads; init = 0.0),
+                 :gs => sum(shunt["gs"] for shunt in bus_shunts; init = 0.0),
+                 :qd => sum(load["qd"] for load in bus_loads; init = 0.0),
+                 :bs => sum(shunt["bs"] for shunt in bus_shunts; init = 0.0),
+                 :baseKV => v["base_kv"],
+                 :type => v["bus_type"],
+                 (Symbol(s) => v[s] for s in ["bus_i", "area", "vm", "va", "zone", "vmax", "vmin"])...,
+                )
+            end for (k, v) in ref[:bus]
+        ),
+        gen = Dict(
+            k => (;
+                :c => ntuple(i -> v["cost"][i], 3),
+                :n => v["ncost"],
+                :bus => v["gen_bus"],
+                :model_poly => v["model"] == 2,
+                :status => v["gen_status"],
+                (Symbol(s) => v[s] for s in ["pg", "qg", "qmax", "qmin", "vg", "mbase", "pmax", "pmin", "startup", "shutdown"])...,
+            ) for (k, v) in ref[:gen]
+        ),
+        arc = arc,
+        branch = Dict(
+            begin
+                g, b = PowerModels.calc_branch_y(branch)
+                tr, ti = PowerModels.calc_branch_t(branch)
+                ttm = tr^2 + ti^2
+                g_fr = branch["g_fr"]
+                b_fr = branch["b_fr"]
+                g_to = branch["g_to"]
+                b_to = branch["b_to"]
+                c1 = (-g * tr - b * ti) / ttm
+                c2 = (-b * tr + g * ti) / ttm
+                c3 = (-g * tr + b * ti) / ttm
+                c4 = (-b * tr - g * ti) / ttm
+                c5 = (g + g_fr) / ttm
+                c6 = (b + b_fr) / ttm
+                c7 = (g + g_to)
+                c8 = (b + b_to)
+                i => (;
+                    :j => 1,
+                    :f_idx => i,
+                    :t_idx => i + num_branch,
+                    :f_bus => branch["f_bus"],
+                    :t_bus => branch["t_bus"],
+                    :c1 => c1,
+                    :c2 => c2,
+                    :c3 => c3,
+                    :c4 => c4,
+                    :c5 => c5,
+                    :c6 => c6,
+                    :c7 => c7,
+                    :c8 => c8,
+                    :status => branch["br_status"],
+                    (Symbol(s) => branch[s] for s in ["br_r", "br_x","b_fr", "b_to", "g_fr", "g_to", "rate_a", "rate_b", "rate_c", "tap", "shift", "angmin", "angmax"])...,
+                )
+            end for (i, branch) in ref[:branch]
+        ),
+        storage = isempty(ref[:storage]) ?  empty_data = Dict{Int, NamedTuple{(:i,), Tuple{Int64}}}() : Dict(
+            begin
+                i => (;:c => i,
+                (Symbol(s) => stor[s] for s in ["storage_bus", "energy", "energy_rating", "charge_rating", "discharge_rating", "discharge_efficiency", "thermal_rating", "charge_efficiency", "qmin", "qmax", "r", "x", "p_loss", "q_loss", "ps", "qs", "status"])...,
+               )
+            end for (i, stor) in ref[:storage]
+        ),
+    )
+
+    return data
+end
+
+function compare_fields(lhs::L, rhs::R, fields) where {L,R}
+    for field in fields
+        if !isapprox(getfield(lhs, field), getfield(rhs, field))
+            @info field
+            @info lhs
+            @info rhs
+        end
+        @test isapprox(getfield(lhs, field), getfield(rhs, field))
+    end
+end
+
+function test_case(ep_output, pm_output, handler, dataset)
+    # when the reference bus gets changed, and there is a tie in pmax, the new ref is unknown
+    if any(map(r -> occursin("as reference based on generator", r), handler.records))
+        @info "Skipping case $dataset due to changed reference bus"
+        return
+    end
+    @test pm_output.version == ep_output.version
+    @test isapprox(pm_output.baseMVA, ep_output.baseMVA)
+    for (i, ep_bus) in enumerate(ep_output.bus)
+        ep_bus.type == 4 && continue
+        pm_bus = pm_output.bus[ep_bus.bus_i]
+        compare_fields(ep_bus, pm_bus, fieldnames(ExaPowerIO.BusData))
+    end
+    for (i, ep_gen) in enumerate(ep_output.gen)
+        ep_gen.status == 0 && continue
+        pm_gen = pm_output.gen[i]
+        compare_fields(ep_gen, pm_gen, [
+            :pg,
+            :qg,
+            :qmax,
+            :qmin,
+            :vg,
+            :mbase,
+            :status,
+            :pmax,
+            :pmin,
+            :model_poly,
+            :startup,
+            :shutdown,
+            :n,
+            :c
+        ])
+        @test ep_output.bus[ep_gen.bus].bus_i == pm_gen.bus
+    end
+    for (i, ep_branch) in enumerate(ep_output.branch)
+        ep_branch.status == 0 && continue
+        pm_branch = pm_output.branch[i]
+        ep_tbus = ep_output.bus[ep_branch.t_bus].bus_i
+        ep_fbus = ep_output.bus[ep_branch.f_bus].bus_i
+        if pm_branch.f_bus == ep_tbus && pm_branch.t_bus == ep_fbus
+            ep_branch = BranchData{Float64}(
+                ep_branch.t_bus,
+                ep_branch.f_bus,
+                ep_branch.br_r * ep_branch.tap^2,
+                ep_branch.br_x * ep_branch.tap^2,
+                ep_branch.b_to / ep_branch.tap^2,
+                ep_branch.b_fr * ep_branch.tap^2,
+                ep_branch.g_to / ep_branch.tap^2,
+                ep_branch.g_fr * ep_branch.tap^2,
+                ep_branch.rate_a,
+                ep_branch.rate_b,
+                ep_branch.rate_c,
+                1 / ep_branch.tap,
+                -ep_branch.shift,
+                ep_branch.status,
+                -ep_branch.angmax,
+                -ep_branch.angmin,
+                # we arent using pm arc calculations so no need to flip
+                ep_branch.f_idx,
+                ep_branch.t_idx
+            )
+            ep_output.arc[i], ep_output.arc[i+length(ep_output.branch)] = ep_output.arc[i+length(ep_output.branch)], ep_output.arc[i]
+            ep_tbus = ep_output.bus[ep_branch.t_bus].bus_i
+            ep_fbus = ep_output.bus[ep_branch.f_bus].bus_i
+        end
+        compare_fields(ep_branch, pm_branch, [
+            :br_r,
+            :br_x,
+            :b_fr,
+            :b_to,
+            :g_fr,
+            :g_to,
+            :rate_a,
+            :rate_b,
+            :rate_c,
+            :tap,
+            :shift,
+            :status,
+            :angmin,
+            :angmax,
+            :f_idx,
+            :t_idx,
+            :c1,
+            :c2,
+            :c3,
+            :c4,
+            :c5,
+            :c6,
+            :c7,
+            :c8,
+        ])
+        @test ep_fbus == pm_branch.f_bus
+        @test ep_tbus == pm_branch.t_bus
+    end
+    for (i, ep_arc) in enumerate(ep_output.arc)
+        # powermodels skips inactive branches
+        haskey(pm_output.arc, i) || continue
+        pm_arc = pm_output.arc[i]
+        compare_fields(ep_arc, pm_arc, [:rate_a])
+        @test ep_output.bus[ep_arc.bus].bus_i == pm_arc.bus
+    end
+    for (i, ep_storage) in enumerate(ep_output.storage)
+        pm_storage = pm_output.storage[i]
+        compare_fields(ep_storage, pm_storage, fieldnames(ExaPowerIO.StorageData))
+    end
+end
 
 @testset "ExaPowerIO parsing tests" begin
-    datadir = "../data/"
-    for dataset in CASES
+    root_logger = getlogger("")
+    handler = StorageHandler{DefaultFormatter}()
+    root_logger.handlers = Dict("storage_logger" => handler)
+
+    for dataset in FILE_CASES
+        handler.records = []
+        @info "Testing with dataset: $dataset"
+        ep_output = ExaPowerIO.parse_matpower(dataset)
+        pm_output = parse_pm(dataset, length(ep_output.branch))
+        test_case(ep_output, pm_output, handler, dataset)
+    end
+    for dataset in PGLIB_CASES
+        handler.records = []
         path = joinpath(PGLib.PGLib_opf, dataset)
         @info "Testing with dataset: $dataset"
-        @info path
-        pp_output = ExaPowerIO.parse_pglib(Float64, Vector, dataset; out_type=NamedTuple)
-        pm_output = PowerModels.parse_file(path)
-        PowerModels.standardize_cost_terms!(pm_output, order = 2)
-        PowerModels.calc_thermal_limits!(pm_output)
-        @test pm_output["source_version"] == pp_output.version
-        @test isapprox(pm_output["baseMVA"], pp_output.baseMVA)
-        # gs, bs
-        pm_i = 0
-        for (i, pp_bus) in enumerate(pp_output.bus)
-            if pp_bus.pd == 0.0 && pp_bus.qd == 0.0
-                continue
-            end
-            pm_i += 1
-            pm_bus = pm_output["bus"][string(pp_bus.bus_i)]
-            pm_load = pm_output["load"][string(pm_i)]
-            @test isapprox(pp_bus.pd, pm_load["pd"])
-            @test isapprox(pp_bus.qd, pm_load["qd"])
-            @test isapprox(pp_bus.baseKV, pm_bus["base_kv"])
-            @test isapprox(pp_bus.vm, pm_bus["vm"])
-            @test isapprox(pp_bus.va, pm_bus["va"])
-
-            @test pp_bus.type == pm_bus["bus_type"]
-            @test pp_bus.bus_i == pm_bus["bus_i"]
-            @test pp_bus.area == pm_bus["area"]
-            @test pp_bus.zone == pm_bus["zone"]
-        end
-        @test pm_i == length(pm_output["load"])
-        for (i, pp_gen) in enumerate(pp_output.gen)
-            pm_gen = pm_output["gen"][string(i)]
-            @test isapprox(pp_gen.pg, pm_gen["pg"])
-            @test isapprox(pp_gen.qg, pm_gen["qg"])
-            @test isapprox(pp_gen.qmax, pm_gen["qmax"])
-            @test isapprox(pp_gen.qmin, pm_gen["qmin"])
-            @test isapprox(pp_gen.vg, pm_gen["vg"])
-            @test isapprox(pp_gen.mbase, pm_gen["mbase"])
-            @test isapprox(pp_gen.pmax, pm_gen["pmax"])
-            @test isapprox(pp_gen.pmin, pm_gen["pmin"])
-            @test isapprox(pp_gen.startup, pm_gen["startup"])
-            @test isapprox(pp_gen.shutdown, pm_gen["shutdown"])
-
-            @test pm_gen["gen_status"] == pp_gen.status
-            @test pm_gen["ncost"] == pp_gen.n
-            @test all(isapprox(pp_c, pm_c) for (pp_c, pm_c) in zip(pp_gen.c, pm_gen["cost"]))
-        end
-        for (i, pp_branch) in enumerate(pp_output.branch)
-            pm_branch = pm_output["branch"][string(i)]
-            pp_tbus = pp_output.bus[pp_branch.tbus].bus_i
-            pp_fbus = pp_output.bus[pp_branch.fbus].bus_i
-            if pm_branch["f_bus"] == pp_tbus && pm_branch["t_bus"] == pp_fbus
-                pp_branch = BranchData{Float64}(
-                    pp_branch.tbus,
-                    pp_branch.fbus,
-                    pp_branch.br_r * pp_branch.tap^2,
-                    pp_branch.br_x * pp_branch.tap^2,
-                    pp_branch.b_to / pp_branch.tap^2,
-                    pp_branch.b_fr * pp_branch.tap^2,
-                    pp_branch.g_to / pp_branch.tap^2,
-                    pp_branch.g_fr * pp_branch.tap^2,
-                    pp_branch.ratea,
-                    pp_branch.rateb,
-                    pp_branch.ratec,
-                    1 / pp_branch.tap,
-                    -pp_branch.shift,
-                    pp_branch.status,
-                    -pp_branch.angmax,
-                    -pp_branch.angmin,
-                )
-                pp_tbus = pp_output.bus[pp_branch.tbus].bus_i
-                pp_fbus = pp_output.bus[pp_branch.fbus].bus_i
-            end
-            @test isapprox(pp_branch.ratea, pm_branch["rate_a"])
-            @test isapprox(pp_branch.rateb, pm_branch["rate_b"])
-            @test isapprox(pp_branch.ratec, pm_branch["rate_c"])
-            @test isapprox(pp_branch.angmax, pm_branch["angmax"])
-            @test isapprox(pp_branch.angmin, pm_branch["angmin"])
-            @test isapprox(pp_branch.br_r, pm_branch["br_r"])
-            @test isapprox(pp_branch.br_x, pm_branch["br_x"])
-            @test isapprox(pp_branch.b_fr, pm_branch["b_fr"])
-            @test isapprox(pp_branch.b_to, pm_branch["b_to"])
-            @test isapprox(pp_branch.g_fr, pm_branch["g_fr"])
-            @test isapprox(pp_branch.g_to, pm_branch["g_to"])
-            @test isapprox(pp_branch.tap, pm_branch["tap"])
-            @test isapprox(pp_branch.shift, pm_branch["shift"])
-
-            @test pp_branch.status == pm_branch["br_status"]
-            @test pp_tbus == pm_branch["t_bus"]
-            @test pp_fbus == pm_branch["f_bus"]
-        end
-        for (i, pp_storage) in enumerate(pp_output.storage)
-            pm_storage = pm_output["storage"][string(i)]
-        end
+        ep_output = ExaPowerIO.parse_matpower(dataset; library=:pglib)
+        pm_output = parse_pm(path, length(ep_output.branch))
+        test_case(ep_output, pm_output, handler, dataset)
     end
 end
 

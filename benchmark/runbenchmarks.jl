@@ -1,4 +1,4 @@
-using ExaPowerIO, BenchmarkTools, PowerModels, PGLib, Profile, PProf, Logging, JLD2
+using ExaPowerIO, BenchmarkTools, PowerModels, PGLib, Profile, PProf, Logging, JLD2, Pkg
 
 PowerModels.silence()
 
@@ -27,7 +27,7 @@ datadir = "../data/"
 function run_exapower!()
     data = Vector{ExaPowerIO.PowerData}(undef, length(CASES))
     for (i, dataset) in enumerate(CASES)
-        data[i] = ExaPowerIO.parse_pglib(Float64, Vector, dataset; out_type=ExaPowerIO.PowerData)
+        data[i] = ExaPowerIO.parse_matpower(dataset; library=:pglib)
     end
     data
 end
