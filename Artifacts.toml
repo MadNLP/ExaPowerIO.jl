@@ -1,5 +1,13 @@
+[MATPOWER]
+git-tree-sha1 = "35edb1c65b12acaa03a87dae8a38b2fe6eff41d2"
+
+    [[MATPOWER.download]]
+    sha256 = "5f08ced1a32e8d0d658ee54b73678c7364a899bae479882f2bc419e91442b69f"
+    url = "https://github.com/MATPOWER/matpower/archive/refs/tags/8.1.tar.gz"
+
 [PGLib_opf]
 git-tree-sha1 = "0e8968a89b6ad43910a8eda4ec30656add35cf91"
+lazy = true
 
     [[PGLib_opf.download]]
     sha256 = "f1421ce22f0a7b9de8a8b2111776b496348220192ad24aace392c3bf608706c2"

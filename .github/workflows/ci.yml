@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        julia-version: ['1.11']
+        julia-version: ['1']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -45,13 +45,22 @@ jobs:
 
       - name: Run tests
         run: |
-          julia --project=. -e 'using Pkg; Pkg.test()'
+          julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
+          
+      - uses: julia-actions/julia-processcoverage@v1
+        with:
+          directories: src
+    
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
-  test-self-hosted:
+test-self-hosted:
     runs-on: self-hosted
     strategy:
       matrix:
-        julia-version: ['1.11']
+        julia-version: ['1']
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -79,6 +88,10 @@ jobs:
         run: |
           julia --project=@. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 
+      - uses: julia-actions/julia-processcoverage@v1
+        with:
+          directories: src
+          
       - name: Run tests
         run: |
-          julia --project=. -e 'using Pkg; Pkg.test()'
+          julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
