@@ -14,6 +14,11 @@ Memento.log(handler::StorageHandler, record::Memento.Record) = push!(handler.rec
 end
 const PGLIB_CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
 const FILE_CASES = ["../data/pglib_opf_case3_lmbd_mod.m", "../data/pglib_opf_case5_pjm_mod.m"]
+const MATPOWER_CASES = ["case10ba.m"]
+
+function fields_excluding(::Type{T}, exclude::Vector{Symbol}) where T
+    filter(f -> !(f in exclude), fieldnames(T))
+end
 
 # this is copied from the old parser.jl
 # power models filters out inactive branches
@@ -126,30 +131,15 @@ function test_case(ep_output, pm_output, handler, dataset)
     end
     @test pm_output.version == ep_output.version
     @test isapprox(pm_output.baseMVA, ep_output.baseMVA)
-    for (i, ep_bus) in enumerate(ep_output.bus)
+    for ep_bus in ep_output.bus
         ep_bus.type == 4 && continue
         pm_bus = pm_output.bus[ep_bus.bus_i]
-        compare_fields(ep_bus, pm_bus, fieldnames(ExaPowerIO.BusData))
+        compare_fields(ep_bus, pm_bus, fields_excluding(ExaPowerIO.BusData, [:i]))
     end
     for (i, ep_gen) in enumerate(ep_output.gen)
         ep_gen.status == 0 && continue
         pm_gen = pm_output.gen[i]
-        compare_fields(ep_gen, pm_gen, [
-            :pg,
-            :qg,
-            :qmax,
-            :qmin,
-            :vg,
-            :mbase,
-            :status,
-            :pmax,
-            :pmin,
-            :model_poly,
-            :startup,
-            :shutdown,
-            :n,
-            :c
-        ])
+        compare_fields(ep_gen, pm_gen, fields_excluding(ExaPowerIO.GenData, [:i, :bus]))
         @test ep_output.bus[ep_gen.bus].bus_i == pm_gen.bus
     end
     for (i, ep_branch) in enumerate(ep_output.branch)
@@ -159,6 +149,7 @@ function test_case(ep_output, pm_output, handler, dataset)
         ep_fbus = ep_output.bus[ep_branch.f_bus].bus_i
         if pm_branch.f_bus == ep_tbus && pm_branch.t_bus == ep_fbus
             ep_branch = BranchData{Float64}(
+                ep_branch.i,
                 ep_branch.t_bus,
                 ep_branch.f_bus,
                 ep_branch.br_r * ep_branch.tap^2,
@@ -183,32 +174,7 @@ function test_case(ep_output, pm_output, handler, dataset)
             ep_tbus = ep_output.bus[ep_branch.t_bus].bus_i
             ep_fbus = ep_output.bus[ep_branch.f_bus].bus_i
         end
-        compare_fields(ep_branch, pm_branch, [
-            :br_r,
-            :br_x,
-            :b_fr,
-            :b_to,
-            :g_fr,
-            :g_to,
-            :rate_a,
-            :rate_b,
-            :rate_c,
-            :tap,
-            :shift,
-            :status,
-            :angmin,
-            :angmax,
-            :f_idx,
-            :t_idx,
-            :c1,
-            :c2,
-            :c3,
-            :c4,
-            :c5,
-            :c6,
-            :c7,
-            :c8,
-        ])
+        compare_fields(ep_branch, pm_branch, fields_excluding(ExaPowerIO.BranchData, [:i, :f_bus, :t_bus]))
         @test ep_fbus == pm_branch.f_bus
         @test ep_tbus == pm_branch.t_bus
     end
@@ -221,7 +187,7 @@ function test_case(ep_output, pm_output, handler, dataset)
     end
     for (i, ep_storage) in enumerate(ep_output.storage)
         pm_storage = pm_output.storage[i]
-        compare_fields(ep_storage, pm_storage, fieldnames(ExaPowerIO.StorageData))
+        compare_fields(ep_storage, pm_storage, fields_excluding(ExaPowerIO.StorageData, [:i]))
     end
 end
 
@@ -233,15 +199,14 @@ end
     for dataset in FILE_CASES
         handler.records = []
         @info "Testing with dataset: $dataset"
-        ep_output = ExaPowerIO.parse_matpower(dataset)
+        ep_output, path = ExaPowerIO.parse_matpower(dataset)
         pm_output = parse_pm(dataset, length(ep_output.branch))
         test_case(ep_output, pm_output, handler, dataset)
     end
     for dataset in PGLIB_CASES
         handler.records = []
-        path = joinpath(PGLib.PGLib_opf, dataset)
-        @info "Testing with dataset: $dataset"
-        ep_output = ExaPowerIO.parse_matpower(dataset; library=:pglib)
+        @info "Testing with pglib dataset: $dataset"
+        ep_output, path = ExaPowerIO.parse_matpower(dataset; library=:pglib)
         pm_output = parse_pm(path, length(ep_output.branch))
         test_case(ep_output, pm_output, handler, dataset)
     end

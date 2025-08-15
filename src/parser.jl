@@ -3,6 +3,7 @@
 
 """
     struct BusData{T <: Real}
+        i :: Int
         bus_i :: Int
         type :: Int
         pd :: T
@@ -19,6 +20,7 @@
     end
 """
 struct BusData{T <: Real}
+    i :: Int
     bus_i :: Int
     type :: Int
     pd :: T
@@ -36,6 +38,7 @@ end
 
 """
     struct BranchData{T <: Real}
+        i :: Int
         f_bus :: Int
         t_bus :: Int
         br_r :: T
@@ -67,6 +70,7 @@ end
 f_bus and t_bus are indices into the PowerData.bus Vector, not bus_i values
 """
 struct BranchData{T <: Real}
+    i :: Int
     f_bus :: Int
     t_bus :: Int
     br_r :: T
@@ -95,6 +99,7 @@ struct BranchData{T <: Real}
     c8 :: T
 end
 function BranchData{T}(
+    i::Int,
     f_bus::Int,
     t_bus::Int,
     br_r::T,
@@ -134,6 +139,7 @@ function BranchData{T}(
     c7 = (g + g_to)
     c8 = (b + b_to)
     BranchData{T}(
+        i,
         f_bus,
         t_bus,
         br_r,
@@ -165,17 +171,20 @@ end
 
 """
     struct ArcData{T <: Real}
+        i :: Int
         bus :: Int
         rate_a :: T
     end
 """
 struct ArcData{T <: Real}
+    i :: Int
     bus :: Int
     rate_a :: T
 end
 
 """
     struct StorageData{T <: Real}
+        i :: Int
         storage_bus :: Int
         ps :: T
         qs :: T
@@ -196,6 +205,7 @@ end
     end
 """
 struct StorageData{T <: Real}
+    i :: Int
     storage_bus :: Int
     ps :: T
     qs :: T
@@ -217,6 +227,7 @@ end
 
 """
     struct GenData{T <: Real}
+        i :: Int
         bus :: Int
         pg :: T
         qg :: T
@@ -237,6 +248,7 @@ end
 bus is an index into the PowerData.bus Vector, not bus_i values
 """
 struct GenData{T <: Real}
+    i :: Int
     bus :: Int
     pg :: T
     qg :: T
@@ -390,6 +402,7 @@ end
             elseif cur_key == "bus"
                 bus_words = @iter_to_ntuple 13 WordedString(line, line_len) (Int, Int, T, T, T, T, Int, T, T, T, Int, T, T)
                 bus[row_num] = BusData(
+                    row_num,
                     bus_words[1],
                     bus_words[2],
                     bus_words[3] / baseMVA,
@@ -411,6 +424,7 @@ end
                     biggest_gen = row_num
                 end
                 gen[row_num] = GenData(
+                    row_num,
                     bus_map[gen_words[1] - bus_offset],
                     gen_words[2] / baseMVA,
                     gen_words[3] / baseMVA,
@@ -438,6 +452,7 @@ end
                     end
                 end
                 gen[row_num] = GenData(
+                    row_num,
                     gen[row_num].bus,
                     gen[row_num].pg,
                     gen[row_num].qg,
@@ -457,6 +472,7 @@ end
             elseif cur_key == "branch"
                 branch_words = @iter_to_ntuple 13 WordedString(line, line_len) (Int, Int, T, T, T, T, T, T, T, T, Int, T, T)
                 branch[row_num] = BranchData{T}(
+                    row_num,
                     bus_map[branch_words[1] - bus_offset],
                     bus_map[branch_words[2] - bus_offset],
                     branch_words[3],
@@ -480,6 +496,7 @@ end
             elseif cur_key == "storage"
                 storage_words = @iter_to_ntuple 17 WordedString(line, line_len) (Int, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, Int)
                 storage[row_num] = StorageData(
+                    row_num,
                     storage_words[1],
                     storage_words[2],
                     storage_words[3],
@@ -505,7 +522,7 @@ end
         elseif !startswith(line, "function") && line_len > 0 && isletter(line[1])
             cur_key = ""
             for key in MATPOWER_KEYS
-                full_name = "mpc.$key"
+                full_name = "mpc.$key ="
                 if startswith(line, full_name)
                     cur_key = key
                     break
@@ -513,8 +530,8 @@ end
             end
 
             if cur_key == ""
-                @info [c for c in line]
-                error("Error parsing data. Invalid variable assignment on line $(line_ind).\n\t$line")
+                @warn "Unrecognized assignment at line $line_ind.\n\t$line" 
+                continue
             end
             if cur_key == "version"
                 raw_data = split(line)[3]
@@ -550,6 +567,7 @@ end
     for (i, b) in enumerate(bus)
         if has_gen[i] && b.type == 1
             bus[i] = BusData(
+                bus[i].i,
                 b.bus_i,
                 2,
                 b.pd,
@@ -569,6 +587,7 @@ end
                 look_for_ref = true
             end
             bus[i] = BusData(
+                bus[i].i,
                 b.bus_i,
                 1,
                 b.pd,
@@ -588,6 +607,7 @@ end
     if look_for_ref
         b = bus[gen[biggest_gen].bus]
         bus[gen[biggest_gen].bus] = BusData(
+            b.i,
             b.bus_i,
             3,
             b.pd,
@@ -607,8 +627,8 @@ end
     num_branch = length(branch)
     arc = V{ArcData{T}}(undef, num_branch * 2)
     for (i, b) in enumerate(branch)
-        arc[i] = ArcData(b.f_bus, b.rate_a)
-        arc[i+num_branch] = ArcData(b.t_bus, b.rate_a)
+        arc[i] = ArcData(i, b.f_bus, b.rate_a)
+        arc[i+num_branch] = ArcData(i+num_branch, b.t_bus, b.rate_a)
     end
 
     return PowerData(version, baseMVA, bus, gen, branch, arc, storage)
