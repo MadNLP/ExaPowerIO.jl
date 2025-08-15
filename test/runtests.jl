@@ -195,18 +195,21 @@ end
     root_logger = getlogger("")
     handler = StorageHandler{DefaultFormatter}()
     root_logger.handlers = Dict("storage_logger" => handler)
+    PGLib_opf = ExaPowerIO.get_path(:pglib)
 
     for dataset in FILE_CASES
         handler.records = []
         @info "Testing with dataset: $dataset"
-        ep_output, path = ExaPowerIO.parse_matpower(dataset)
+        ep_output = ExaPowerIO.parse_matpower(dataset)
         pm_output = parse_pm(dataset, length(ep_output.branch))
         test_case(ep_output, pm_output, handler, dataset)
     end
     for dataset in PGLIB_CASES
         handler.records = []
         @info "Testing with pglib dataset: $dataset"
-        ep_output, path = ExaPowerIO.parse_matpower(dataset; library=:pglib)
+        path = joinpath(PGLib_opf, dataset)
+        @info path
+        ep_output = ExaPowerIO.parse_matpower(dataset; library=:pglib)
         pm_output = parse_pm(path, length(ep_output.branch))
         test_case(ep_output, pm_output, handler, dataset)
     end

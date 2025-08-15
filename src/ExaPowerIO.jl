@@ -27,7 +27,7 @@ function parse_matpower(
     ::Type{V},
     path :: String;
     library=nothing,
-) :: Tuple{PowerData{T}, String} where {T<:Real, V<:AbstractVector}
+) :: PowerData{T} where {T<:Real, V<:AbstractVector}
     if library == :pglib
         PGLib_opf = joinpath(artifact"PGLib_opf", "pglib-opf-23.07")
         path = joinpath(PGLib_opf, path)
@@ -36,12 +36,18 @@ function parse_matpower(
         path = joinpath(MATPOWER_opf, path)
     end
     isfile(path) || throw(error("Invalid file $path for library $library"))
-    return (parse_matpower_inner(T, V, path), path)
+    return parse_matpower_inner(T, V, path)
 end
 
 parse_matpower(path; library=nothing) = parse_matpower(Float64, Vector, path; library)
 parse_matpower(::Type{T}, path; library=nothing) where {T<:Real} = parse_matpower(T, Vector, path; library)
 parse_matpower(::Type{V}, path; library=nothing) where {V<:Vector} = parse_matpower(Float64, V, path; library)
+
+function get_path(library::Symbol)
+    library == :pglib && return joinpath(artifact"PGLib_opf", "pglib-opf-23.07")
+    library == :matpower && return joinpath(artifact"MATPOWER_opf", "matpower-8.1/data")
+    error("Invalid library passed to ExaPowerIO.get_path")
+end
 
 export parse_matpower, PowerData, BusData, GenData, BranchData, ArcData, StorageData
 
