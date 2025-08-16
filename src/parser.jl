@@ -1,6 +1,8 @@
 # FOR CONVENIENCE, the MATPOWER file spec
 # https://matpower.app/manual/matpower/DataFileFormat.html
 
+include("shared.jl")
+
 """
     struct BusData{T <: Real}
         i :: Int
@@ -297,39 +299,7 @@ struct PowerData{
 end
 
 const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "areas", "bus", "gencost", "gen", "branch", "storage"];
-const NULL_VIEW::SubString{String} = SubString("", 1, 0)
-const PRINTABLE_ASCII = 256
-is_end(c::Char) = isspace(c) || c in "=;[]%"
-const ENDS = ntuple(i -> is_end(Char(i)), PRINTABLE_ASCII)
 const KEY_MIN_LEN = 4
-
-struct WordedString
-    s :: SubString{String}
-    len :: Int
-end
-
-@inbounds @views function iter_ws(ws :: WordedString, start :: Int) :: Tuple{SubString{String}, Int}
-    if start > ws.len
-        return (NULL_VIEW, 0)
-    end
-    left = start
-    while isspace(ws.s[left]) && left <= ws.len
-        left += 1
-    end
-    if left > ws.len || ws.s[left] == '%'
-        return (NULL_VIEW, 0)
-    end
-    right = left
-    should_end = c -> ENDS[c]
-    while right <= ws.len && !should_end(Int8(ws.s[right]))
-        right += 1
-    end
-    # right is non-inclusive
-    if should_end(Int8(ws.s[left]))
-        right += 1
-    end
-    (ws.s[left:right-1], right)
-end
 
 macro iter_to_ntuple(n, iter_expr, types)
     iter_sym = gensym("iter")
@@ -338,13 +308,13 @@ macro iter_to_ntuple(n, iter_expr, types)
 
     body = Expr[]
     push!(body, :($iter_sym = $(esc(iter_expr))))
-    push!(body, :($state_sym = iter_ws($iter_sym, 1)))
+    push!(body, :($state_sym = iterate($iter_sym, 1)))
     
     length(types.args) != n && error("types provided to @iter_to_ntuple had length $(length(types.args)) instead of $n")
     for i in 1:n
         push!(body, :($(x_syms[i]) = parse($(esc(types.args[i])), $state_sym[1])))
         if i < n
-            push!(body, :($state_sym = $state_sym[2] == 0 ? (NULL_VIEW, 0) : iter_ws($iter_sym, $state_sym[2])))
+            push!(body, :($state_sym = iterate($iter_sym, $state_sym[2])))
         end
     end
     push!(body, Expr(:tuple, x_syms...))
