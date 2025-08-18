@@ -1,8 +1,6 @@
 # FOR CONVENIENCE, the MATPOWER file spec
 # https://matpower.app/manual/matpower/DataFileFormat.html
 
-include("shared.jl")
-
 """
     struct BusData{T <: Real}
         i :: Int
@@ -301,18 +299,18 @@ end
 const MATPOWER_KEYS :: Vector{String} = ["version", "baseMVA", "areas", "bus", "gencost", "gen", "branch", "storage"];
 const KEY_MIN_LEN = 4
 
-macro iter_to_ntuple(n, iter_expr, types)
+macro iter_to_ntuple(n, line, line_len, types)
     iter_sym = gensym("iter")
     state_sym = gensym("state")
     x_syms = [gensym("x") for _ in 1:n]
 
     body = Expr[]
-    push!(body, :($iter_sym = $(esc(iter_expr))))
+    push!(body, :($iter_sym = $(esc(WordedString))($(esc(line)), $(esc(line_len)))))
     push!(body, :($state_sym = iterate($iter_sym, 1)))
     
     length(types.args) != n && error("types provided to @iter_to_ntuple had length $(length(types.args)) instead of $n")
     for i in 1:n
-        push!(body, :($(x_syms[i]) = parse($(esc(types.args[i])), $state_sym[1])))
+        push!(body, :($(x_syms[i]) = parse($(esc(types.args[i])), $iter_sym.s[$state_sym[1]])))
         if i < n
             push!(body, :($state_sym = iterate($iter_sym, $state_sym[2])))
         end
@@ -370,7 +368,7 @@ end
                 end
                 in_array = false
             elseif cur_key == "bus"
-                bus_words = @iter_to_ntuple 13 WordedString(line, line_len) (Int, Int, T, T, T, T, Int, T, T, T, Int, T, T)
+                bus_words = @iter_to_ntuple 13 line line_len (Int, Int, T, T, T, T, Int, T, T, T, Int, T, T)
                 bus[row_num] = BusData(
                     row_num,
                     bus_words[1],
@@ -388,7 +386,7 @@ end
                     bus_words[13],
                 )
             elseif cur_key == "gen"
-                gen_words = @iter_to_ntuple 10 WordedString(line, line_len) (Int, T, T, T, T, T, T, Int, T, T)
+                gen_words = @iter_to_ntuple 10 line line_len (Int, T, T, T, T, T, T, Int, T, T)
                 if gen_words[8] != 0 && gen_words[10] > biggest_gen_pmax
                     biggest_gen_pmax = gen_words[10]
                     biggest_gen = row_num
@@ -412,7 +410,7 @@ end
                     (T(0), T(0), T(0)),
                 )
             elseif cur_key == "gencost"
-                genc_words = @iter_to_ntuple 7 WordedString(line, line_len) (Int, T, T, Int, T, T, T)
+                genc_words = @iter_to_ntuple 7 line line_len (Int, T, T, Int, T, T, T)
                 model_poly = genc_words[1] == 2
                 n = genc_words[4]
                 normalize_cost = let baseMVA = baseMVA
@@ -440,7 +438,7 @@ end
                     ntuple(normalize_cost, 3)
                 )
             elseif cur_key == "branch"
-                branch_words = @iter_to_ntuple 13 WordedString(line, line_len) (Int, Int, T, T, T, T, T, T, T, T, Int, T, T)
+                branch_words = @iter_to_ntuple 13 line line_len (Int, Int, T, T, T, T, T, T, T, T, Int, T, T)
                 branch[row_num] = BranchData{T}(
                     row_num,
                     bus_map[branch_words[1] - bus_offset],
@@ -464,7 +462,7 @@ end
                 )
                 cur_branch += 1
             elseif cur_key == "storage"
-                storage_words = @iter_to_ntuple 17 WordedString(line, line_len) (Int, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, Int)
+                storage_words = @iter_to_ntuple 17 line line_len (Int, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, Int)
                 storage[row_num] = StorageData(
                     row_num,
                     storage_words[1],

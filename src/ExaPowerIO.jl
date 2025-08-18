@@ -2,7 +2,9 @@ module ExaPowerIO
 
 using LazyArtifacts
 
+include("shared.jl")
 include("parser.jl")
+include("sc.jl")
 
 """
     function parse_matpower(
@@ -49,6 +51,6 @@ function get_path(library::Symbol)
     error("Invalid library passed to ExaPowerIO.get_path")
 end
 
-export parse_matpower, PowerData, BusData, GenData, BranchData, ArcData, StorageData
+export parse_sc_data, parse_uc_data, parse_matpower, PowerData, BusData, GenData, BranchData, ArcData, StorageData
 
 end # module ExaPowerIO

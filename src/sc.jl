@@ -1,80 +1,81 @@
-include("shared.jl")
+using Parsers
 
 @enum SpecNodeTag float=1 int=2 string=3 list=4 dict=5
 
 struct SpecNode
     name::SubString{String}
-    id::Int64
+    sym::Symbol
     kids::Vector{SpecNode}
     tag::SpecNodeTag
 end
 
-@views macro gen_parser(fname)
-    file = read(open(fname), String)
+@views macro gen_parser(fname, out_name)
+    mod_path = isnothing(pathof(@__MODULE__)) ? "src/" : "$(dirname(pathof(@__MODULE__)))/"
+    file = read(open("$mod_path$fname"), String)
 
-    stack = [SpecNode(NULL_VIEW, 0, [], float)]
+    stack = [SpecNode(NULL_VIEW, gensym(), [], float)]
     parse_string = quote
         @inline @inbounds @views function $(:parse_string)(words, start)::Tuple{SubString{String}, Int64}
             escaped = false
             i = start
-            while isspace(words.s[i])
+            while isspace(codeunit(words.s, i))
                 i += 1
             end
             i += 1
-            while words.s[i] != '"' || escaped
+            start = i
+            while codeunit(words.s, i) != UInt8('"') || escaped
                 escaped = words.s[i] == '\\'
                 i += 1
             end
-            return words.s[start+1:i-1], i+1
+            return words.s[start:i-1], i+1
         end
     end
     parse_int = quote
-        @inline function $(:parse_int)(words, start)::Tuple{Int64, Int64}
+        @inbounds @inline function $(:parse_int)(words, start)::Tuple{Int64, Int64}
             raw, start = iterate(words, start)
-            return parse(Int64, raw), start
+            return parse(Int64, words.s[raw]), start
         end
     end
     parse_float = quote
-        @inline function $(:parse_float)(words, start)::Tuple{Float64, Int64}
+        @inbounds @inline function $(:parse_float)(words, start)::Tuple{Float64, Int64}
             raw, start = iterate(words, start)
-            return parse(Float64, raw), start
+            return parse(Float64, words.s[raw]), start
         end
     end
     parsers = [parse_string, parse_int, parse_float]
     name = NULL_VIEW
-    for word in WordedString(file, length(file))
-        if word[1] == '['
-            push!(stack, SpecNode(name, length(parsers), [], list))
-            push!(parsers, :())
-        elseif word[1] == '{'
-            push!(stack, SpecNode(name, length(parsers), [], dict))
-            push!(parsers, :())
-        elseif word == "string"
-            parser_name = Symbol("parse_$(length(parsers))")
-            push!(stack[end].kids, SpecNode(name, length(parsers), [], string))
+    words = WordedString(file)
+    for word in words
+        if words.s[word[1]] == '['
+            push!(stack, SpecNode(name, gensym(), [], list))
+        elseif words.s[word[1]] == '{'
+            push!(stack, SpecNode(name, gensym(), [], dict))
+        elseif words.s[word] == "string"
+            parser_name = gensym()
+            push!(stack[end].kids, SpecNode(name, parser_name, [], string))
             push!(parsers, :($parser_name(words, start)::Tuple{String, Int64} = parse_string(words, start)))
-        elseif word == "int"
-            parser_name = Symbol("parse_$(length(parsers))")
-            push!(stack[end].kids, SpecNode(name, length(parsers), [], int))
+        elseif words.s[word] == "int"
+            parser_name = gensym()
+            push!(stack[end].kids, SpecNode(name, parser_name, [], int))
             push!(parsers, :($parser_name(words, start)::Tuple{Int64, Int64} = parse_int(words, start)))
-        elseif word == "float"
-            parser_name = Symbol("parse_$(length(parsers))")
-            push!(stack[end].kids, SpecNode(name, length(parsers), [], float))
+        elseif words.s[word] == "float"
+            parser_name = gensym()
+            push!(stack[end].kids, SpecNode(name, parser_name, [], float))
             push!(parsers, :($parser_name(words, start)::Tuple{Float64, Int64} = parse_float(words, start)))
-        elseif word[1] == ']'
+        elseif words.s[word[1]] == ']'
             last = pop!(stack)
-            parser_name = Symbol("parse_$(last.id)")
-            child_parser = Symbol("parse_$(last.kids[1].id)")
-            parsers[last.id + 1] = quote
-                @inline function $parser_name(words::WordedString, start::Int)
+            parser_name = last.sym
+            child_parser = last.kids[1].sym
+            parser = quote
+                @inbounds @inline function $parser_name(words::WordedStringUnchecked, start::Int)
                     word = NULL_VIEW
                     result = []
                     word, start = iterate(words, start)
                     next_word, next_start = iterate(words, start)
-                    if next_word[1] == ']'
+                    if words.s[next_word[1]] == ']'
                         return result, next_start
                     end
-                    while word[1] != ']'
+                    while words.s[word[1]] != ']'
                         kid, start = $child_parser(words, start)
                         push!(result, kid)
                         word, start = iterate(words, start)
@@ -82,35 +83,41 @@ end
                     return result, start
                 end
             end
+            push!(parsers, parser)
             push!(stack[end].kids, last)
-        elseif word[1] == '}'
+        elseif words.s[word[1]] == '}'
             last = pop!(stack)
-            parser_name = Symbol("parse_$(last.id)")
+            parser_name = last.sym
             calls = Vector(undef, length(last.kids) * 2)
             for (i, kid) in enumerate(last.kids)
                 calls[2*i-1] = quote
                     word, start = iterate(words, start)
-                    $(Symbol(kid.name)), start = $(Symbol("parse_$(kid.id)"))(words, start)
+                    $(Symbol(kid.name)), start = $(kid.sym)(words, start)
                 end
                 calls[2*i] = quote word, start = iterate(words, start) end
             end
             result = map(kid -> :($(Symbol(kid.name)) = $(Symbol(kid.name))), last.kids)
-            parsers[last.id + 1] = quote
-                @inline function $parser_name(words::WordedString, start::Int)
+            parser = quote
+                @inbounds @inline function $parser_name(words::WordedStringUnchecked, start::Int)
                     word, start = iterate(words, start)
                     $(calls...)
                     (($(result...),), start)
                 end
             end
+            push!(parsers, parser)
             push!(stack[end].kids, last)
         else
-            name = word
+            name = words.s[word]
         end
     end
     final_name = Symbol("parse_$(stack[1].kids[1].name)")
-    result= quote
+    result = quote
         $(parsers...)
-        $(esc(Symbol("parse_$(stack[1].kids[1].name)"))) = $(Symbol("parse_$(stack[1].kids[1].id)"))
+        function $(esc(out_name))(s)
+            $(stack[1].kids[1].sym)(WordedStringUnchecked(s), 1)[1]
+        end
     end
     return result
 end
+@gen_parser "goc3_uc.spec" parse_uc_data
+@gen_parser "goc3_static.spec" parse_sc_data

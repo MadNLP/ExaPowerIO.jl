@@ -6,9 +6,7 @@ data {
             connection_cost float
             disconnection_cost float
             fr_bus string
-            initial_status {
-                on_status int
-            }
+            initial_status { on_status int }
             mva_ub_em float
             mva_ub_nom float
             r float

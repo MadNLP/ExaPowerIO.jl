@@ -1,4 +1,4 @@
-using ExaPowerIO, BenchmarkTools, PowerModels, PGLib, Profile, PProf, Logging, JLD2, Pkg
+using ExaPowerIO, BenchmarkTools, PowerModels, PGLib, Profile, PProf, Logging, JLD2
 
 PowerModels.silence()
 
@@ -10,6 +10,7 @@ for (i, arg) in enumerate(ARGS)
         break
     end
 end
+SC = "--sc"
 COMPARE_PM = "--compare-pm" in ARGS
 COMPARE_JLD2 = "--compare-jld2" in ARGS
 PROFILE = "--profile" in ARGS
