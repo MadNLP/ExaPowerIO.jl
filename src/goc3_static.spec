@@ -28,9 +28,8 @@ data {
             uid string
         }]
         bus [{
-            active_preserve_uids [ string ]
+            active_reserve_uids [ string ]
             base_nom_volt float
-            con_loss_factor float
             initial_status {
                 va float
                 vm float
@@ -165,8 +164,8 @@ data {
             p_ramp_res_down_online_cost [ float ]
             p_ramp_res_up_offline_cost [ float ]
             p_ramp_res_up_online_cost [ float ]
-            p_ramp_res_down_cost [ float ]
-            p_ramp_res_up_cost [ float ]
+            p_reg_res_down_cost [ float ]
+            p_reg_res_up_cost [ float ]
             p_syn_res_cost [ float ]
             p_ub [ float ]
             q_lb [float ]

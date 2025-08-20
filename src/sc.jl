@@ -37,9 +37,9 @@ end
         end
     end
     parse_float = quote
-        @inbounds @inline function $(:parse_float)(words, start)::Tuple{Float64, Int64}
+        @inbounds @inline function ($(:parse_float)(::Type{T}, words, start)::Tuple{T, Int64}) where T<:Real
             raw, start = iterate(words, start)
-            return parse(Float64, words.s[raw]), start
+            return parse(T, words.s[raw]), start
         end
     end
     parsers = [parse_string, parse_int, parse_float]
@@ -53,21 +53,21 @@ end
         elseif words.s[word] == "string"
             parser_name = gensym()
             push!(stack[end].kids, SpecNode(name, parser_name, [], string))
-            push!(parsers, :($parser_name(words, start)::Tuple{String, Int64} = parse_string(words, start)))
+            push!(parsers, :(($parser_name(::Type{T}, words, start)::Tuple{String, Int64}) where T<:Real = parse_string(words, start)))
         elseif words.s[word] == "int"
             parser_name = gensym()
             push!(stack[end].kids, SpecNode(name, parser_name, [], int))
-            push!(parsers, :($parser_name(words, start)::Tuple{Int64, Int64} = parse_int(words, start)))
+            push!(parsers, :(($parser_name(::Type{T}, words, start)::Tuple{Int64, Int64}) where T<:Real = parse_int(words, start)))
         elseif words.s[word] == "float"
             parser_name = gensym()
             push!(stack[end].kids, SpecNode(name, parser_name, [], float))
-            push!(parsers, :($parser_name(words, start)::Tuple{Float64, Int64} = parse_float(words, start)))
+            push!(parsers, :(($parser_name(::Type{T}, words, start)::Tuple{T, Int64}) where T<:Real = parse_float(T, words, start)))
         elseif words.s[word[1]] == ']'
             last = pop!(stack)
             parser_name = last.sym
             child_parser = last.kids[1].sym
             parser = quote
-                @inbounds @inline function $parser_name(words::WordedStringUnchecked, start::Int)
+                @inbounds @inline function ($parser_name(::Type{T}, words::WordedStringUnchecked, start::Int)) where T<:Real
                     word = NULL_VIEW
                     result = []
                     word, start = iterate(words, start)
@@ -76,7 +76,7 @@ end
                         return result, next_start
                     end
                     while words.s[word[1]] != ']'
-                        kid, start = $child_parser(words, start)
+                        kid, start = $child_parser(T, words, start)
                         push!(result, kid)
                         word, start = iterate(words, start)
                     end
@@ -92,13 +92,15 @@ end
             for (i, kid) in enumerate(last.kids)
                 calls[2*i-1] = quote
                     word, start = iterate(words, start)
-                    $(Symbol(kid.name)), start = $(kid.sym)(words, start)
+                    name = $(kid.name)
+                    @assert words.s[word] == "\"$name\":"
+                    $(Symbol(kid.name)), start = $(kid.sym)(T, words, start)
                 end
                 calls[2*i] = quote word, start = iterate(words, start) end
             end
             result = map(kid -> :($(Symbol(kid.name)) = $(Symbol(kid.name))), last.kids)
             parser = quote
-                @inbounds @inline function $parser_name(words::WordedStringUnchecked, start::Int)
+                @inbounds @inline function ($parser_name(::Type{T}, words::WordedStringUnchecked, start::Int)) where T<:Real
                     word, start = iterate(words, start)
                     $(calls...)
                     (($(result...),), start)
@@ -113,8 +115,8 @@ end
     final_name = Symbol("parse_$(stack[1].kids[1].name)")
     result = quote
         $(parsers...)
-        function $(esc(out_name))(s)
-            $(stack[1].kids[1].sym)(WordedStringUnchecked(s), 1)[1]
+        function ($(esc(out_name))(::Type{T}, s)) where T<:Real
+            $(stack[1].kids[1].sym)(T, WordedStringUnchecked(s), 1)[1]
         end
     end
     return result

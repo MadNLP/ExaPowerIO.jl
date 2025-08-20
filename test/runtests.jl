@@ -1,4 +1,4 @@
-using ExaPowerIO, Test, PowerModels, PGLib, Memento
+using ExaPowerIO, Test, PowerModels, PGLib, Memento, JSON
 
 mutable struct StorageHandler{F} <: Handler{F}
     records::Vector{String}
@@ -14,6 +14,7 @@ Memento.log(handler::StorageHandler, record::Memento.Record) = push!(handler.rec
 end
 const PGLIB_CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
 const FILE_CASES = ["../data/pglib_opf_case3_lmbd_mod.m", "../data/pglib_opf_case5_pjm_mod.m"]
+const GOC3_CASES = ["scenario_112.json"]
 const MATPOWER_CASES = ["case10ba.m"]
 
 function fields_excluding(::Type{T}, exclude::Vector{Symbol}) where T
@@ -191,12 +192,41 @@ function test_case(ep_output, pm_output, handler, dataset)
     end
 end
 
+function compare_nt_dict(ep, json)
+    if typeof(json) <: Dict
+        for (key, val) in json
+            compare_nt_dict(getfield(ep, Symbol(key)), json[key])
+        end
+    elseif typeof(json) <: Int || typeof(json) <: AbstractString
+        @test json == ep
+    elseif typeof(json) <: Real
+        @test isapprox(json, json; atol=10e-6)
+    elseif typeof(json) <: Vector
+        for i in 1:length(json)
+            compare_nt_dict(ep[i], json[i])
+        end
+    else
+        @error typeof(ep), typeof(json)
+    end
+end
+
 @testset "ExaPowerIO parsing tests" begin
     root_logger = getlogger("")
     handler = StorageHandler{DefaultFormatter}()
     root_logger.handlers = Dict("storage_logger" => handler)
     PGLib_opf = ExaPowerIO.get_path(:pglib)
 
+    for dataset in GOC3_CASES
+        @info "Testing with goc3 dataset: $dataset"
+        path = "../data/E1/D1/C3E1N00003D1/$dataset"
+        sc_string = read(open(path), String)
+        uc_string = read(open("$path.pop_solution.json"), String)
+        ep_output = ExaPowerIO.parse_goc3(Float64, path)
+        sc_json = JSON.parse(sc_string)
+        uc_json = JSON.parse(uc_string)
+        compare_nt_dict(ep_output.sc, sc_json)
+        compare_nt_dict(ep_output.uc, uc_json)
+    end
     for dataset in FILE_CASES
         handler.records = []
         @info "Testing with dataset: $dataset"

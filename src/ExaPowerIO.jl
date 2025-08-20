@@ -17,8 +17,6 @@ include("sc.jl")
     parse_matpower(::Type{T}, path; library=nothing) where {T<:Real}
     parse_matpower(::Type{V}, path; library=nothing) where {V<:Vector}
 
-T and V can be ommited and have default values `Float64`, and `Vector` respectively.
-
 `library` can be one of the following values:
 - `:nothing` indicates that the filesystem should be searched for `path`
 - `:pglib` indicates that the [PGLib database](https://github.com/power-grid-lib/pglib-opf) should be searched for `path`
@@ -31,11 +29,9 @@ function parse_matpower(
     library=nothing,
 ) :: PowerData{T} where {T<:Real, V<:AbstractVector}
     if library == :pglib
-        PGLib_opf = joinpath(artifact"PGLib_opf", "pglib-opf-23.07")
-        path = joinpath(PGLib_opf, path)
+        path = joinpath(get_path(:pglib), path)
     elseif library == :matpower
-        MATPOWER_opf = joinpath(artifact"MATPOWER_opf", "matpower-8.1/data")
-        path = joinpath(MATPOWER_opf, path)
+        path = joinpath(get_path(:matpower), path)
     end
     isfile(path) || throw(error("Invalid file $path for library $library"))
     return parse_matpower_inner(T, V, path)
@@ -51,6 +47,20 @@ function get_path(library::Symbol)
     error("Invalid library passed to ExaPowerIO.get_path")
 end
 
-export parse_sc_data, parse_uc_data, parse_matpower, PowerData, BusData, GenData, BranchData, ArcData, StorageData
+"""
+    function parse_goc3(::Type{T}, path::String) where T<:Real :: NamedTuple
+    parse_goc3(path::String) where T<:Real :: NamedTuple
+
+"""
+function parse_goc3(::Type{T}, path::String) :: NamedTuple where T<:Real
+    @info path
+    sc_string = read(open(path), String)
+    sc = parse_sc_data(T, sc_string)
+    uc_string = read(open("$path.pop_solution.json"), String)
+    uc = parse_uc_data(T, uc_string)
+    (uc=uc, sc=sc)
+end
+
+export parse_goc3, parse_matpower, PowerData, BusData, GenData, BranchData, ArcData, StorageData
 
 end # module ExaPowerIO
