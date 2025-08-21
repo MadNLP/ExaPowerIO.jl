@@ -103,11 +103,16 @@ function parse_pm(filename, num_branch)
         storage = isempty(ref[:storage]) ?  empty_data = Dict{Int, NamedTuple{(:i,), Tuple{Int64}}}() : Dict(
             begin
                 i => (;:c => i,
-                (Symbol(s) => stor[s] for s in ["storage_bus", "energy", "energy_rating", "charge_rating", "discharge_rating", "discharge_efficiency", "thermal_rating", "charge_efficiency", "qmin", "qmax", "r", "x", "p_loss", "q_loss", "ps", "qs", "status"])...,
+                :Zr => stor["r"],
+                :Zim => stor["x"],
+                :Pexts => stor["ps"],
+                :Qexts => stor["qs"],
+                (Symbol(s) => stor[s] for s in ["storage_bus", "energy", "energy_rating", "charge_rating", "discharge_rating", "discharge_efficiency", "thermal_rating", "charge_efficiency", "qmin", "qmax", "p_loss", "q_loss", "status"])...,
                )
             end for (i, stor) in ref[:storage]
         ),
     )
+    @info data.storage
 
     return data
 end
