@@ -1,9 +1,10 @@
 name: CI
 
 on:
-  pull_request:
+  push:
     branches:
       - main
+  pull_request:
 
 permissions:
   actions: write
@@ -15,7 +16,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        julia-version: ['1.11']
+        julia-version: ['1']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,58 +40,9 @@ jobs:
           key: compiled-${{ runner.os }}-${{ hashFiles('**/Project.toml') }}-${{ hashFiles('**/Manifest.toml') }}
           restore-keys: compiled-${{ runner.os }}-
 
-      - name: Install package dependencies
-        run: |
-          julia --project=@. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
-
       - name: Run tests
         run: |
-          julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
-
-      - uses: julia-actions/julia-processcoverage@v1
-        with:
-          directories: src
-
-      - uses: codecov/codecov-action@v5
-        with:
-          file: lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  test-self-hosted:
-    runs-on: self-hosted
-    strategy:
-      matrix:
-        julia-version: ['1.11']
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Julia
-        uses: julia-actions/install-juliaup@v2
-        with:
-          channel: ${{ matrix.julia-version }}
-
-      - name: Cache Julia artifacts
-        uses: actions/cache@v3
-        with:
-          path: ~/.julia/artifacts
-          key: artifacts-${{ runner.os }}-${{ hashFiles('**/Project.toml') }}-${{ hashFiles('**/Manifest.toml') }}
-          restore-keys: artifacts-${{ runner.os }}-
-
-      - name: Cache Julia packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.julia/compiled
-          key: compiled-${{ runner.os }}-${{ hashFiles('**/Project.toml') }}-${{ hashFiles('**/Manifest.toml') }}
-          restore-keys: compiled-${{ runner.os }}-
-
-      - name: Install package dependencies
-        run: |
-          julia --project=@. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
-
-      - name: Run tests
-        run: |
-          julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
+          julia --project=. --color=yes -e 'using Pkg; Pkg.Registry.update(); Pkg.instantiate(); Pkg.precompile(); Pkg.test(coverage=true)'
 
       - uses: julia-actions/julia-processcoverage@v1
         with:

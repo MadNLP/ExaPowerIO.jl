@@ -32,7 +32,7 @@ function parse_matpower(
         PGLib_opf = joinpath(artifact"PGLib_opf", "pglib-opf-23.07")
         path = joinpath(PGLib_opf, path)
     elseif library == :matpower
-        MATPOWER_opf = joinpath(artifact"MATPOWER_opf", "matpower-8.1/data")
+        MATPOWER_opf = joinpath(artifact"MATPOWER_opf", "matpower-8.1", "data")
         path = joinpath(MATPOWER_opf, path)
     end
     isfile(path) || throw(error("Invalid file $path for library $library"))
