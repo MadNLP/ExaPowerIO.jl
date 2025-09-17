@@ -41,9 +41,9 @@ julia> result.baseMVA
 
 julia> result.bus
 3-element Vector{BusData{Float64}}:
- BusData{Float64}(1, 3, 1.1, 0.4, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
- BusData{Float64}(2, 2, 1.1, 0.4, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
- BusData{Float64}(3, 2, 0.95, 0.5, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
+ BusData{Float64}(1, 1, 3, 1.1, 0.4, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
+ BusData{Float64}(2, 2, 2, 1.1, 0.4, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
+ BusData{Float64}(3, 3, 2, 0.95, 0.5, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
 
 julia> result.gen
 3-element Vector{GenData{Float64}}:
