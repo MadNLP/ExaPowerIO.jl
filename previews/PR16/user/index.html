@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>User Docs · ExaPowerIO.jl</title><meta name="title" content="User Docs · ExaPowerIO.jl"/><meta property="og:title" content="User Docs · ExaPowerIO.jl"/><meta property="twitter:title" content="User Docs · ExaPowerIO.jl"/><meta name="description" content="Documentation for ExaPowerIO.jl."/><meta property="og:description" content="Documentation for ExaPowerIO.jl."/><meta property="twitter:description" content="Documentation for ExaPowerIO.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">ExaPowerIO.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Introduction</a></li><li class="is-active"><a class="tocitem" href>User Docs</a></li><li><a class="tocitem" href="../dev/">Developer Docs</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>User Docs</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>User Docs</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/MadNLP/ExaPowerIO.jl/tree/main" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="User-Documentation"><a class="docs-heading-anchor" href="#User-Documentation">User Documentation</a><a id="User-Documentation-1"></a><a class="docs-heading-anchor-permalink" href="#User-Documentation" title="Permalink"></a></h1><p>ExaPowerIO exports 1 function:</p><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.parse_matpower" href="#ExaPowerIO.parse_matpower"><code>ExaPowerIO.parse_matpower</code></a> — <span class="docstring-category">Function</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">function parse_matpower(
+    ::Type{T},
+    ::Type{V},
+    path :: String;
+    library=nothing,
+) :: PowerData{T} where {T&lt;:Real, V&lt;:AbstractVector}
+parse_matpower(path; library=nothing)
+parse_matpower(::Type{T}, path; library=nothing) where {T&lt;:Real}
+parse_matpower(::Type{V}, path; library=nothing) where {V&lt;:Vector}</code></pre><p>T and V can be ommited and have default values <code>Float64</code>, and <code>Vector</code> respectively.</p><p><code>library</code> can be one of the following values:</p><ul><li><code>:nothing</code> indicates that the filesystem should be searched for <code>path</code></li><li><code>:pglib</code> indicates that the <a href="https://github.com/power-grid-lib/pglib-opf">PGLib database</a> should be searched for <code>path</code></li><li><code>:matpower</code> indicates that the <a href="https://github.com/MATPOWER/matpower">MATPOWER database</a> should be searched for <code>path</code></li></ul></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.PowerData" href="#ExaPowerIO.PowerData"><code>ExaPowerIO.PowerData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct Data{T &lt;: Real}
+    version :: String
+    baseMVA :: T
+    bus :: Vector{BusData{T}}
+    gen :: Vector{GenData{T}}
+    branch :: Vector{BranchData{T}}
+    storage :: Vector{StorageData{T}}
+end</code></pre><p><code>version</code>, <code>baseMVA</code>, <code>bus</code>, <code>gen</code>, <code>branch</code>, and <code>storage</code> all corespond to members of the mpc object created by a matpower file. Their fields correspond exactly with the columns of the relevant <code>mpc</code> member.</p></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.BusData" href="#ExaPowerIO.BusData"><code>ExaPowerIO.BusData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct BusData{T &lt;: Real}
+    i :: Int
+    bus_i :: Int
+    type :: Int
+    pd :: T
+    qd :: T
+    gs :: T
+    bs :: T
+    area :: Int
+    vm :: T
+    va :: T
+    baseKV :: T
+    zone :: Int
+    vmax :: T
+    vmin :: T
+end</code></pre></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.GenData" href="#ExaPowerIO.GenData"><code>ExaPowerIO.GenData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct GenData{T &lt;: Real}
+    i :: Int
+    bus :: Int
+    pg :: T
+    qg :: T
+    qmax :: T
+    qmin :: T
+    vg :: T
+    mbase :: T
+    status :: Int
+    pmax :: T
+    pmin :: T
+    model_poly :: Bool
+    startup :: T
+    shutdown :: T
+    n :: Int
+    c :: NTuple{3, T}
+end</code></pre><p>bus is an index into the PowerData.bus Vector, not bus_i values</p></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.BranchData" href="#ExaPowerIO.BranchData"><code>ExaPowerIO.BranchData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct BranchData{T &lt;: Real}
+    i :: Int
+    f_bus :: Int
+    t_bus :: Int
+    br_r :: T
+    br_x :: T
+    b_fr :: T,
+    b_to :: T,
+    g_fr :: T,
+    g_to :: T,
+    rate_a ::T
+    rate_b :: T
+    rate_c :: T
+    tap :: T
+    shift :: T
+    status :: Int
+    angmin :: T
+    angmax :: T
+    f_idx::Int
+    t_idx::Int
+    c1 :: T
+    c2 :: T
+    c3 :: T
+    c4 :: T
+    c5 :: T
+    c6 :: T
+    c7 :: T
+    c8 :: T
+end</code></pre><p>f<em>bus and t</em>bus are indices into the PowerData.bus Vector, not bus_i values</p></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.ArcData" href="#ExaPowerIO.ArcData"><code>ExaPowerIO.ArcData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct ArcData{T &lt;: Real}
+    i :: Int
+    bus :: Int
+    rate_a :: T
+end</code></pre></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.StorageData" href="#ExaPowerIO.StorageData"><code>ExaPowerIO.StorageData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct StorageData{T &lt;: Real}
+    i :: Int
+    storage_bus :: Int
+    ps :: T
+    qs :: T
+    energy :: T
+    energy_rating :: T
+    charge_rating :: T
+    discharge_rating :: T
+    charge_efficiency :: T
+    discharge_efficiency :: T
+    thermal_rating :: T
+    qmin :: T
+    qmax :: T
+    r :: T
+    x :: T
+    p_loss :: T
+    q_loss :: T
+    status :: Int
+end</code></pre></div></section></article><h3 id="Example-Usage"><a class="docs-heading-anchor" href="#Example-Usage">Example Usage</a><a id="Example-Usage-1"></a><a class="docs-heading-anchor-permalink" href="#Example-Usage" title="Permalink"></a></h3><pre><code class="language-julia-repl hljs">julia&gt; using ExaPowerIO
+
+julia&gt; result = parse_matpower(&quot;pglib_opf_case3_lmbd.m&quot;; library=:pglib);
+
+julia&gt; result.version
+&quot;2&quot;
+
+julia&gt; result.baseMVA
+100.0
+
+julia&gt; result.bus
+3-element Vector{BusData{Float64}}:
+ BusData{Float64}(1, 1, 3, 1.1, 0.4, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
+ BusData{Float64}(2, 2, 2, 1.1, 0.4, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
+ BusData{Float64}(3, 3, 2, 0.95, 0.5, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
+
+julia&gt; result.gen
+3-element Vector{GenData{Float64}}:
+ GenData{Float64}(1, 1, 10.0, 0.0, 10.0, -10.0, 1.0, 100.0, 1, 20.0, 0.0, true, 0.0, 0.0, 3, (1100.0, 500.0, 0.0))
+ GenData{Float64}(2, 2, 10.0, 0.0, 10.0, -10.0, 1.0, 100.0, 1, 20.0, 0.0, true, 0.0, 0.0, 3, (850.0000000000001, 120.0, 0.0))
+ GenData{Float64}(3, 3, 0.0, 0.0, 10.0, -10.0, 1.0, 100.0, 1, 0.0, 0.0, true, 0.0, 0.0, 3, (0.0, 0.0, 0.0))
+
+julia&gt; result.branch
+3-element Vector{BranchData{Float64}}:
+ BranchData{Float64}(1, 1, 3, 0.065, 0.62, 0.225, 0.225, 0.0, 0.0, 90.0, 90.0, 90.0, 1.0, 0.0, 1, -0.5235987755982988, 0.5235987755982988, 1, 4, -0.16725635252492763, 1.5953682856223865, -0.16725635252492763, 1.5953682856223865, 0.16725635252492763, -1.3703682856223864, 0.16725635252492763, -1.3703682856223864)
+ BranchData{Float64}(2, 3, 2, 0.025, 0.75, 0.35, 0.35, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 1, -0.5235987755982988, 0.5235987755982988, 2, 5, -0.044395116537180916, 1.3318534961154274, -0.044395116537180916, 1.3318534961154274, 0.044395116537180916, -0.9818534961154274, 0.044395116537180916, -0.9818534961154274)
+ BranchData{Float64}(3, 1, 2, 0.042, 0.9, 0.15, 0.15, 0.0, 0.0, 90.0, 90.0, 90.0, 1.0, 0.0, 1, -0.5235987755982988, 0.5235987755982988, 3, 6, -0.05173917542536994, 1.1086966162579273, -0.05173917542536994, 1.1086966162579273, 0.05173917542536994, -0.9586966162579272, 0.05173917542536994, -0.9586966162579272)
+
+julia&gt; result.storage
+StorageData{Float64}[]
+</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Introduction</a><a class="docs-footer-nextpage" href="../dev/">Developer Docs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Thursday 18 September 2025 19:50">Thursday 18 September 2025</span>. Using Julia version 1.11.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
