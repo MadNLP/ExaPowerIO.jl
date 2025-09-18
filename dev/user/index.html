@@ -4,7 +4,10 @@
     ::Type{V},
     path :: String;
     library=nothing,
-) :: PowerData{T} where {T&lt;:Real, V&lt;:AbstractVector}</code></pre><p>T and V can be ommited and have default values <code>Float64</code>, and <code>Vector</code> respectively.</p><p><code>library</code> can be one of the following values:</p><ul><li><code>:nothing</code> indicates that the filesystem should be searched for <code>path</code></li><li><code>:pglib</code> indicates that the <a href="https://github.com/power-grid-lib/pglib-opf">PGLib database</a> should be searched for <code>path</code></li><li><code>:matpower</code> indicates that the <a href="https://github.com/MATPOWER/matpower">MATPOWER database</a> should be searched for <code>path</code></li></ul></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.PowerData" href="#ExaPowerIO.PowerData"><code>ExaPowerIO.PowerData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct Data{T &lt;: Real}
+) :: PowerData{T} where {T&lt;:Real, V&lt;:AbstractVector}
+parse_matpower(path; library=nothing)
+parse_matpower(::Type{T}, path; library=nothing) where {T&lt;:Real}
+parse_matpower(::Type{V}, path; library=nothing) where {V&lt;:Vector}</code></pre><p>T and V can be ommited and have default values <code>Float64</code>, and <code>Vector</code> respectively.</p><p><code>library</code> can be one of the following values:</p><ul><li><code>:nothing</code> indicates that the filesystem should be searched for <code>path</code></li><li><code>:pglib</code> indicates that the <a href="https://github.com/power-grid-lib/pglib-opf">PGLib database</a> should be searched for <code>path</code></li><li><code>:matpower</code> indicates that the <a href="https://github.com/MATPOWER/matpower">MATPOWER database</a> should be searched for <code>path</code></li></ul></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.PowerData" href="#ExaPowerIO.PowerData"><code>ExaPowerIO.PowerData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct Data{T &lt;: Real}
     version :: String
     baseMVA :: T
     bus :: Vector{BusData{T}}
@@ -12,6 +15,7 @@
     branch :: Vector{BranchData{T}}
     storage :: Vector{StorageData{T}}
 end</code></pre><p><code>version</code>, <code>baseMVA</code>, <code>bus</code>, <code>gen</code>, <code>branch</code>, and <code>storage</code> all corespond to members of the mpc object created by a matpower file. Their fields correspond exactly with the columns of the relevant <code>mpc</code> member.</p></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.BusData" href="#ExaPowerIO.BusData"><code>ExaPowerIO.BusData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct BusData{T &lt;: Real}
+    i :: Int
     bus_i :: Int
     type :: Int
     pd :: T
@@ -26,6 +30,7 @@ end</code></pre><p><code>version</code>, <code>baseMVA</code>, <code>bus</code>,
     vmax :: T
     vmin :: T
 end</code></pre></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.GenData" href="#ExaPowerIO.GenData"><code>ExaPowerIO.GenData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct GenData{T &lt;: Real}
+    i :: Int
     bus :: Int
     pg :: T
     qg :: T
@@ -42,6 +47,7 @@ end</code></pre></div></section></article><article class="docstring"><header><a 
     n :: Int
     c :: NTuple{3, T}
 end</code></pre><p>bus is an index into the PowerData.bus Vector, not bus_i values</p></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.BranchData" href="#ExaPowerIO.BranchData"><code>ExaPowerIO.BranchData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct BranchData{T &lt;: Real}
+    i :: Int
     f_bus :: Int
     t_bus :: Int
     br_r :: T
@@ -69,9 +75,11 @@ end</code></pre><p>bus is an index into the PowerData.bus Vector, not bus_i valu
     c7 :: T
     c8 :: T
 end</code></pre><p>f<em>bus and t</em>bus are indices into the PowerData.bus Vector, not bus_i values</p></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.ArcData" href="#ExaPowerIO.ArcData"><code>ExaPowerIO.ArcData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct ArcData{T &lt;: Real}
+    i :: Int
     bus :: Int
     rate_a :: T
 end</code></pre></div></section></article><article class="docstring"><header><a class="docstring-article-toggle-button fa-solid fa-chevron-down" href="javascript:;" title="Collapse docstring"></a><a class="docstring-binding" id="ExaPowerIO.StorageData" href="#ExaPowerIO.StorageData"><code>ExaPowerIO.StorageData</code></a> — <span class="docstring-category">Type</span><span class="is-flex-grow-1 docstring-article-toggle-button" title="Collapse docstring"></span></header><section><div><pre><code class="language-julia hljs">struct StorageData{T &lt;: Real}
+    i :: Int
     storage_bus :: Int
     ps :: T
     qs :: T
@@ -101,22 +109,22 @@ julia&gt; result.baseMVA
 
 julia&gt; result.bus
 3-element Vector{BusData{Float64}}:
- BusData{Float64}(1, 3, 1.1, 0.4, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
- BusData{Float64}(2, 2, 1.1, 0.4, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
- BusData{Float64}(3, 2, 0.95, 0.5, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
+ BusData{Float64}(1, 1, 3, 1.1, 0.4, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
+ BusData{Float64}(2, 2, 2, 1.1, 0.4, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
+ BusData{Float64}(3, 3, 2, 0.95, 0.5, 0.0, 0.0, 1, 1.0, 0.0, 240.0, 1, 1.1, 0.9)
 
 julia&gt; result.gen
 3-element Vector{GenData{Float64}}:
- GenData{Float64}(1, 10.0, 0.0, 10.0, -10.0, 1.0, 100.0, 1, 20.0, 0.0, true, 0.0, 0.0, 3, (1100.0, 500.0, 0.0))
- GenData{Float64}(2, 10.0, 0.0, 10.0, -10.0, 1.0, 100.0, 1, 20.0, 0.0, true, 0.0, 0.0, 3, (850.0000000000001, 120.0, 0.0))
- GenData{Float64}(3, 0.0, 0.0, 10.0, -10.0, 1.0, 100.0, 1, 0.0, 0.0, true, 0.0, 0.0, 3, (0.0, 0.0, 0.0))
+ GenData{Float64}(1, 1, 10.0, 0.0, 10.0, -10.0, 1.0, 100.0, 1, 20.0, 0.0, true, 0.0, 0.0, 3, (1100.0, 500.0, 0.0))
+ GenData{Float64}(2, 2, 10.0, 0.0, 10.0, -10.0, 1.0, 100.0, 1, 20.0, 0.0, true, 0.0, 0.0, 3, (850.0000000000001, 120.0, 0.0))
+ GenData{Float64}(3, 3, 0.0, 0.0, 10.0, -10.0, 1.0, 100.0, 1, 0.0, 0.0, true, 0.0, 0.0, 3, (0.0, 0.0, 0.0))
 
 julia&gt; result.branch
 3-element Vector{BranchData{Float64}}:
- BranchData{Float64}(1, 3, 0.065, 0.62, 0.225, 0.225, 0.0, 0.0, 90.0, 90.0, 90.0, 1.0, 0.0, 1, -0.5235987755982988, 0.5235987755982988, 1, 4, -0.16725635252492763, 1.5953682856223865, -0.16725635252492763, 1.5953682856223865, 0.16725635252492763, -1.3703682856223864, 0.16725635252492763, -1.3703682856223864)
- BranchData{Float64}(3, 2, 0.025, 0.75, 0.35, 0.35, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 1, -0.5235987755982988, 0.5235987755982988, 2, 5, -0.044395116537180916, 1.3318534961154274, -0.044395116537180916, 1.3318534961154274, 0.044395116537180916, -0.9818534961154274, 0.044395116537180916, -0.9818534961154274)
- BranchData{Float64}(1, 2, 0.042, 0.9, 0.15, 0.15, 0.0, 0.0, 90.0, 90.0, 90.0, 1.0, 0.0, 1, -0.5235987755982988, 0.5235987755982988, 3, 6, -0.05173917542536994, 1.1086966162579273, -0.05173917542536994, 1.1086966162579273, 0.05173917542536994, -0.9586966162579272, 0.05173917542536994, -0.9586966162579272)
+ BranchData{Float64}(1, 1, 3, 0.065, 0.62, 0.225, 0.225, 0.0, 0.0, 90.0, 90.0, 90.0, 1.0, 0.0, 1, -0.5235987755982988, 0.5235987755982988, 1, 4, -0.16725635252492763, 1.5953682856223865, -0.16725635252492763, 1.5953682856223865, 0.16725635252492763, -1.3703682856223864, 0.16725635252492763, -1.3703682856223864)
+ BranchData{Float64}(2, 3, 2, 0.025, 0.75, 0.35, 0.35, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 1, -0.5235987755982988, 0.5235987755982988, 2, 5, -0.044395116537180916, 1.3318534961154274, -0.044395116537180916, 1.3318534961154274, 0.044395116537180916, -0.9818534961154274, 0.044395116537180916, -0.9818534961154274)
+ BranchData{Float64}(3, 1, 2, 0.042, 0.9, 0.15, 0.15, 0.0, 0.0, 90.0, 90.0, 90.0, 1.0, 0.0, 1, -0.5235987755982988, 0.5235987755982988, 3, 6, -0.05173917542536994, 1.1086966162579273, -0.05173917542536994, 1.1086966162579273, 0.05173917542536994, -0.9586966162579272, 0.05173917542536994, -0.9586966162579272)
 
 julia&gt; result.storage
 StorageData{Float64}[]
-</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Introduction</a><a class="docs-footer-nextpage" href="../dev/">Developer Docs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Thursday 14 August 2025 14:01">Thursday 14 August 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Introduction</a><a class="docs-footer-nextpage" href="../dev/">Developer Docs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Thursday 18 September 2025 19:36">Thursday 18 September 2025</span>. Using Julia version 1.11.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
