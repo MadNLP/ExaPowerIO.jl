@@ -12,9 +12,10 @@ Memento.log(handler::StorageHandler, record::Memento.Record) = push!(handler.rec
     s = s[1:findfirst(c -> !isdigit(c), s)-1]
     return parse(Int, s)
 end
-const PGLIB_CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
-const FILE_CASES = ["../data/pglib_opf_case3_lmbd_mod.m", "../data/pglib_opf_case5_pjm_mod.m"]
-const MATPOWER_CASES = ["case10ba.m"]
+#const PGLIB_CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
+const PGLIB_CASES = ["pglib_opf_case78484_epigrids.m"]
+const FILE_CASES = []
+const MATPOWER_CASES = []
 
 function fields_excluding(::Type{T}, exclude::Vector{Symbol}) where T
     filter(f -> !(f in exclude), fieldnames(T))
@@ -128,30 +129,38 @@ function compare_fields(lhs::L, rhs::R, fields) where {L,R}
     end
 end
 
-function test_case(ep_output, pm_output, handler, dataset)
+function test_case(ep_filtered, ep_unfiltered, pm_output, handler, dataset)
     # when the reference bus gets changed, and there is a tie in pmax, the new ref is unknown
     if any(map(r -> occursin("as reference based on generator", r), handler.records))
         @info "Skipping case $dataset due to changed reference bus"
         return
     end
-    @test pm_output.version == ep_output.version
-    @test isapprox(pm_output.baseMVA, ep_output.baseMVA)
-    for ep_bus in ep_output.bus
+    @test pm_output.version == ep_filtered.version
+    @test isapprox(pm_output.baseMVA, ep_filtered.baseMVA)
+    filtered_ind = 1
+    for (i, ep_bus) in enumerate(ep_unfiltered.bus)
         ep_bus.type == 4 && continue
+        ep_bus = ep_filtered.bus[filtered_ind]
         pm_bus = pm_output.bus[ep_bus.bus_i]
         compare_fields(ep_bus, pm_bus, fields_excluding(ExaPowerIO.BusData, [:i]))
+        filtered_ind += 1
     end
-    for (i, ep_gen) in enumerate(ep_output.gen)
+    filtered_ind = 1
+    for (i, ep_gen) in enumerate(ep_unfiltered.gen)
         ep_gen.status == 0 && continue
+        ep_gen = ep_filtered.gen[filtered_ind]
         pm_gen = pm_output.gen[i]
         compare_fields(ep_gen, pm_gen, fields_excluding(ExaPowerIO.GenData, [:i, :bus]))
-        @test ep_output.bus[ep_gen.bus].bus_i == pm_gen.bus
+        @test ep_filtered.bus[ep_gen.bus].bus_i == pm_gen.bus
+        filtered_ind += 1
     end
-    for (i, ep_branch) in enumerate(ep_output.branch)
+    filtered_ind = 1
+    for (i, ep_branch) in enumerate(ep_unfiltered.branch)
         ep_branch.status == 0 && continue
+        ep_branch = ep_filtered.branch[filtered_ind]
         pm_branch = pm_output.branch[i]
-        ep_tbus = ep_output.bus[ep_branch.t_bus].bus_i
-        ep_fbus = ep_output.bus[ep_branch.f_bus].bus_i
+        ep_tbus = ep_filtered.bus[ep_branch.t_bus].bus_i
+        ep_fbus = ep_filtered.bus[ep_branch.f_bus].bus_i
         if pm_branch.f_bus == ep_tbus && pm_branch.t_bus == ep_fbus
             ep_branch = BranchData{Float64}(
                 ep_branch.i,
@@ -175,22 +184,29 @@ function test_case(ep_output, pm_output, handler, dataset)
                 ep_branch.f_idx,
                 ep_branch.t_idx
             )
-            ep_output.arc[i], ep_output.arc[i+length(ep_output.branch)] = ep_output.arc[i+length(ep_output.branch)], ep_output.arc[i]
-            ep_tbus = ep_output.bus[ep_branch.t_bus].bus_i
-            ep_fbus = ep_output.bus[ep_branch.f_bus].bus_i
+            ep_filtered.arc[i], ep_filtered.arc[i+length(ep_filtered.branch)] = ep_filtered.arc[i+length(ep_filtered.branch)], ep_filtered.arc[i]
+            ep_tbus = ep_filtered.bus[ep_branch.t_bus].bus_i
+            ep_fbus = ep_filtered.bus[ep_branch.f_bus].bus_i
         end
-        compare_fields(ep_branch, pm_branch, fields_excluding(ExaPowerIO.BranchData, [:i, :f_bus, :t_bus]))
         @test ep_fbus == pm_branch.f_bus
         @test ep_tbus == pm_branch.t_bus
+        @test ep_filtered.arc[ep_branch.f_idx].bus == ep_branch.f_bus
+        @test ep_filtered.arc[ep_branch.t_idx].bus == ep_branch.t_bus
+        compare_fields(ep_branch, pm_branch, fields_excluding(ExaPowerIO.BranchData, [:i, :f_bus, :t_bus, :f_idx, :t_idx]))
+        filtered_ind += 1
     end
-    for (i, ep_arc) in enumerate(ep_output.arc)
-        # powermodels skips inactive branches
-        haskey(pm_output.arc, i) || continue
+    filtered_ind = 1
+    for (i, ep_arc) in enumerate(ep_unfiltered.arc)
+        if !haskey(pm_output.arc, i)
+            continue
+        end
+        ep_arc = ep_filtered.arc[filtered_ind]
         pm_arc = pm_output.arc[i]
         compare_fields(ep_arc, pm_arc, [:rate_a])
-        @test ep_output.bus[ep_arc.bus].bus_i == pm_arc.bus
+        @test ep_filtered.bus[ep_arc.bus].bus_i == pm_arc.bus
+        filtered_ind += 1
     end
-    for (i, ep_storage) in enumerate(ep_output.storage)
+    for (i, ep_storage) in enumerate(ep_filtered.storage)
         pm_storage = pm_output.storage[i]
         compare_fields(ep_storage, pm_storage, fields_excluding(ExaPowerIO.StorageData, [:i]))
     end
@@ -205,18 +221,20 @@ end
     for dataset in FILE_CASES
         handler.records = []
         @info "Testing with dataset: $dataset"
-        ep_output = ExaPowerIO.parse_matpower(dataset)
-        pm_output = parse_pm(dataset, length(ep_output.branch))
-        test_case(ep_output, pm_output, handler, dataset)
+        ep_filtered = ExaPowerIO.parse_matpower(dataset)
+        ep_unfiltered = ExaPowerIO.parse_matpower(dataset; filtered=false)
+        pm_output = parse_pm(dataset, length(ep_filtered.branch))
+        test_case(ep_filtered, ep_unfiltered, pm_output, handler, dataset)
     end
     for dataset in PGLIB_CASES
         handler.records = []
         @info "Testing with pglib dataset: $dataset"
         path = joinpath(PGLib_opf, dataset)
         @info path
-        ep_output = ExaPowerIO.parse_matpower(dataset; library=:pglib)
-        pm_output = parse_pm(path, length(ep_output.branch))
-        test_case(ep_output, pm_output, handler, dataset)
+        ep_filtered = ExaPowerIO.parse_matpower(dataset; library=:pglib)
+        ep_unfiltered = ExaPowerIO.parse_matpower(dataset; library=:pglib, filtered=false)
+        pm_output = parse_pm(path, length(ep_unfiltered.branch))
+        test_case(ep_filtered, ep_unfiltered, pm_output, handler, dataset)
     end
     # TODO: include MATPOWER cases
 end

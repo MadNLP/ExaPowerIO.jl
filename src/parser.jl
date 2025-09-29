@@ -363,13 +363,14 @@ function get_arr_len(lines :: Vector{SubString{String}}, num_lines::Int, start::
     error("Array defined on line $start was not closed")
 end
 
-@inbounds @inline @views function parse_matpower_inner(::Type{T}, ::Type{V}, fname :: String) where {T<:Real, V<:AbstractVector}
+@inbounds @inline @views function parse_matpower_inner(::Type{T}, ::Type{V}, fname :: String, filtered :: Bool) where {T<:Real, V<:AbstractVector}
     fstring = read(open(fname), String)
     lines = split(fstring, "\n")
     in_array = false
     cur_key = ""
     bus = BusData{T}[]
     gen = GenData{T}[]
+    skipped_gens = Int[]
     branch = BranchData{T}[]
     storage = StorageData{T}[]
     num_lines = length(lines)
@@ -384,6 +385,9 @@ end
     cur_branch = 1
     biggest_gen = -1
     biggest_gen_pmax = -Inf
+    num_skipped_gens = 0
+    cur_skipped_gen = 1
+    @info filtered
     for line in lines
         line_len = line.ncodeunits
         line_ind += 1
@@ -417,6 +421,10 @@ end
                     bus_words[12],
                     bus_words[13],
                 )
+                if filtered && bus[row_num].type == 4
+                    pop!(bus)
+                    continue
+                end
             elseif cur_key == "gen"
                 gen_words = @iter_to_ntuple 10 WordedString(line, line_len) (Int, T, T, T, T, T, T, Int, T, T)
                 if gen_words[8] != 0 && gen_words[10] > biggest_gen_pmax
@@ -441,8 +449,18 @@ end
                     0,
                     (T(0), T(0), T(0)),
                 )
+                if filtered && gen[row_num].status == 0
+                    pop!(gen)
+                    num_skipped_gens += 1
+                    skipped_gens[num_skipped_gens] = row_num
+                    continue
+                end
             elseif cur_key == "gencost"
                 genc_words = @iter_to_ntuple 7 WordedString(line, line_len) (Int, T, T, Int, T, T, T)
+                if filtered && row_num == skipped_gens[cur_skipped_gen]
+                    cur_skipped_gen += 1
+                    continue
+                end
                 model_poly = genc_words[1] == 2
                 n = genc_words[4]
                 normalize_cost = let baseMVA = baseMVA
@@ -450,6 +468,12 @@ end
                         c = genc_words[4 + i]
                         return model_poly ? baseMVA ^ (n-i) * c : c
                     end
+                end
+                if row_num > length(gen)
+                    @info cur_skipped_gen
+                    @info num_skipped_gens
+                    @info skipped_gens
+                    @info (row_num, gen[row_num-1])
                 end
                 gen[row_num] = GenData(
                     row_num,
@@ -492,6 +516,10 @@ end
                     cur_branch,
                     cur_branch + num_branch
                 )
+                if filtered && branch[row_num].status == 0
+                    pop!(branch)
+                    continue
+                end
                 cur_branch += 1
             elseif cur_key == "storage"
                 storage_words = @iter_to_ntuple 17 WordedString(line, line_len) (Int, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, Int)
@@ -545,6 +573,9 @@ end
                     bus = V{BusData{T}}(undef, arr_len)
                 elseif cur_key == "gen"
                     gen = V{GenData{T}}(undef, arr_len)
+                    if filtered
+                        skipped_gens = Vector{Int}(undef, arr_len)
+                    end
                 elseif cur_key == "branch"
                     branch = V{BranchData{T}}(undef, arr_len)
                     num_branch = arr_len
@@ -627,6 +658,29 @@ end
     num_branch = length(branch)
     arc = V{ArcData{T}}(undef, num_branch * 2)
     for (i, b) in enumerate(branch)
+        if filtered
+            branch[i] = BranchData{T}(
+                branch[i].i,
+                branch[i].f_bus,
+                branch[i].t_bus,
+                branch[i].br_r,
+                branch[i].br_x,
+                branch[i].b_fr,
+                branch[i].b_to,
+                branch[i].g_fr,
+                branch[i].g_to,
+                branch[i].rate_a,
+                branch[i].rate_b,
+                branch[i].rate_c,
+                branch[i].tap,
+                branch[i].shift,
+                branch[i].status,
+                branch[i].angmin,
+                branch[i].angmax,
+                branch[i].f_idx,
+                branch[i].f_idx + num_branch
+           )
+        end
         arc[i] = ArcData(i, b.f_bus, b.rate_a)
         arc[i+num_branch] = ArcData(i+num_branch, b.t_bus, b.rate_a)
     end
