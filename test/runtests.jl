@@ -113,7 +113,6 @@ function parse_pm(filename, num_branch)
             end for (i, stor) in ref[:storage]
         ),
     )
-    @info data.storage
 
     return data
 end

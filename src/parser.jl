@@ -387,7 +387,6 @@ end
     biggest_gen_pmax = -Inf
     num_skipped_gens = 0
     cur_skipped_gen = 1
-    @info filtered
     for line in lines
         line_len = line.ncodeunits
         line_ind += 1
@@ -468,12 +467,6 @@ end
                         c = genc_words[4 + i]
                         return model_poly ? baseMVA ^ (n-i) * c : c
                     end
-                end
-                if row_num > length(gen)
-                    @info cur_skipped_gen
-                    @info num_skipped_gens
-                    @info skipped_gens
-                    @info (row_num, gen[row_num-1])
                 end
                 gen[row_num] = GenData(
                     row_num,
