@@ -452,6 +452,7 @@ end
                     pop!(gen)
                     num_skipped_gens += 1
                     skipped_gens[num_skipped_gens] = row_num
+                    skipped_gens[num_skipped_gens+1] = 0
                     continue
                 end
             elseif cur_key == "gencost"
@@ -567,7 +568,9 @@ end
                 elseif cur_key == "gen"
                     gen = V{GenData{T}}(undef, arr_len)
                     if filtered
-                        skipped_gens = Vector{Int}(undef, arr_len)
+                        # extra elem for terminator
+                        skipped_gens = Vector{Int}(undef, arr_len + 1)
+                        skipped_gens[1] = 0
                     end
                 elseif cur_key == "branch"
                     branch = V{BranchData{T}}(undef, arr_len)

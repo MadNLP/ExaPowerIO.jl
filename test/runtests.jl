@@ -12,8 +12,7 @@ Memento.log(handler::StorageHandler, record::Memento.Record) = push!(handler.rec
     s = s[1:findfirst(c -> !isdigit(c), s)-1]
     return parse(Int, s)
 end
-#const PGLIB_CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
-const PGLIB_CASES = ["pglib_opf_case78484_epigrids.m"]
+const PGLIB_CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
 const FILE_CASES = []
 const MATPOWER_CASES = []
 
