@@ -13,7 +13,8 @@ Memento.log(handler::StorageHandler, record::Memento.Record) = push!(handler.rec
     return parse(Int, s)
 end
 const PGLIB_CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
-const FILE_CASES = ["pglib_opf_case3_lmbd_mod.m", "pglib_opf_case5_pjm_mod.m"]
+const FILE_CASES = ["../data/$case" for case in readdir("../data")]
+#const FILE_CASES = ["../data/pglib_opf_case10192_epigrids_storage.m"]
 
 function fields_excluding(::Type{T}, exclude::Vector{Symbol}) where T
     filter(f -> !(f in exclude), fieldnames(T))
@@ -134,24 +135,26 @@ function test_case(ep_filtered, ep_unfiltered, pm_output, handler, dataset)
     end
     @test pm_output.version == ep_filtered.version
     @test isapprox(pm_output.baseMVA, ep_filtered.baseMVA)
-    filtered_ind = 1
-    for (i, ep_bus) in enumerate(ep_unfiltered.bus)
-        ep_bus.type == 4 && continue
-        ep_bus = ep_filtered.bus[filtered_ind]
+    for (i, ep_bus) in enumerate(ep_filtered.bus)
         pm_bus = pm_output.bus[ep_bus.bus_i]
         compare_fields(ep_bus, pm_bus, fields_excluding(ExaPowerIO.BusData, [:i]))
-        filtered_ind += 1
     end
+
     filtered_ind = 1
+    @test length(ep_filtered.gen) == length(pm_output.gen)
     for (i, ep_gen) in enumerate(ep_unfiltered.gen)
         ep_gen.status == 0 && continue
         ep_gen = ep_filtered.gen[filtered_ind]
         pm_gen = pm_output.gen[i]
         compare_fields(ep_gen, pm_gen, fields_excluding(ExaPowerIO.GenData, [:i, :bus]))
         @test ep_filtered.bus[ep_gen.bus].bus_i == pm_gen.bus
+        delete!(pm_output.gen, i)
         filtered_ind += 1
     end
+    @test isempty(pm_output.gen)
+
     filtered_ind = 1
+    @test length(ep_filtered.branch) == length(pm_output.branch)
     for (i, ep_branch) in enumerate(ep_unfiltered.branch)
         ep_branch.status == 0 && continue
         ep_branch = ep_filtered.branch[filtered_ind]
@@ -190,9 +193,13 @@ function test_case(ep_filtered, ep_unfiltered, pm_output, handler, dataset)
         @test ep_filtered.arc[ep_branch.f_idx].bus == ep_branch.f_bus
         @test ep_filtered.arc[ep_branch.t_idx].bus == ep_branch.t_bus
         compare_fields(ep_branch, pm_branch, fields_excluding(ExaPowerIO.BranchData, [:i, :f_bus, :t_bus, :f_idx, :t_idx]))
+        delete!(pm_output.branch, i)
         filtered_ind += 1
     end
+    @test isempty(pm_output.branch)
+
     filtered_ind = 1
+    @test length(ep_filtered.arc) == length(pm_output.arc)
     for (i, ep_arc) in enumerate(ep_unfiltered.arc)
         if !haskey(pm_output.arc, i)
             continue
@@ -201,8 +208,12 @@ function test_case(ep_filtered, ep_unfiltered, pm_output, handler, dataset)
         pm_arc = pm_output.arc[i]
         compare_fields(ep_arc, pm_arc, [:rate_a])
         @test ep_filtered.bus[ep_arc.bus].bus_i == pm_arc.bus
+        delete!(pm_output.arc, i)
         filtered_ind += 1
     end
+    @test isempty(pm_output.arc)
+
+    @test length(ep_filtered.storage) == length(pm_output.storage)
     for (i, ep_storage) in enumerate(ep_filtered.storage)
         pm_storage = pm_output.storage[i]
         compare_fields(ep_storage, pm_storage, fields_excluding(ExaPowerIO.StorageData, [:i]))
@@ -220,7 +231,7 @@ end
         @info "Testing with dataset: $dataset"
         ep_filtered = ExaPowerIO.parse_matpower(dataset)
         ep_unfiltered = ExaPowerIO.parse_matpower(dataset; filtered=false)
-        pm_output = parse_pm(dataset, length(ep_filtered.branch))
+        pm_output = parse_pm(dataset, length(ep_unfiltered.branch))
         test_case(ep_filtered, ep_unfiltered, pm_output, handler, dataset)
     end
     for dataset in PGLIB_CASES
