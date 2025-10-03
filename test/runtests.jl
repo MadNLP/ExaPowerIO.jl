@@ -13,8 +13,7 @@ Memento.log(handler::StorageHandler, record::Memento.Record) = push!(handler.rec
     return parse(Int, s)
 end
 const PGLIB_CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
-const FILE_CASES = []
-const MATPOWER_CASES = []
+const FILE_CASES = ["pglib_opf_case3_lmbd_mod.m", "pglib_opf_case5_pjm_mod.m"]
 
 function fields_excluding(::Type{T}, exclude::Vector{Symbol}) where T
     filter(f -> !(f in exclude), fieldnames(T))
@@ -234,7 +233,6 @@ end
         pm_output = parse_pm(path, length(ep_unfiltered.branch))
         test_case(ep_filtered, ep_unfiltered, pm_output, handler, dataset)
     end
-    # TODO: include MATPOWER cases
 end
 
 ROW_TYPES = [
