@@ -13,8 +13,7 @@ Memento.log(handler::StorageHandler, record::Memento.Record) = push!(handler.rec
     return parse(Int, s)
 end
 const PGLIB_CASES = sort!(PGLib.find_pglib_case(""); by=pglib_num_buses)
-const FILE_CASES = ["../data/$case" for case in readdir("../data")]
-#const FILE_CASES = ["../data/pglib_opf_case10192_epigrids_storage.m"]
+const FILE_CASES = ["../data/$case" for case in readdir("../data") if case != "LICENSE"]
 
 function fields_excluding(::Type{T}, exclude::Vector{Symbol}) where T
     filter(f -> !(f in exclude), fieldnames(T))
