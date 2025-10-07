@@ -36,8 +36,7 @@
 %   Contact M.E. Brennan (me.brennan@ieee.org) for inquries on further reuse of
 %   this dataset.
 %
-%	Modified to have additional storage capacity on bus 2
-
+% Modified to have additional storage capacity and increased gencost
 function mpc = pglib_opf_case3_lmbd
 mpc.version = '2';
 mpc.baseMVA = 100.0;
@@ -66,18 +65,18 @@ mpc.gencost = [
 	2	 0.0	 0.0	 3	   0.000000	   0.000000	   0.000000;
 ];
 
+%% storage data
+%	bus	energy	energy_rating	charge_rating	discharge_rating	thermal_rating	qmin	qmax	r	x	standby_loss	status
+mpc.storage = [
+	1	0.0	0.0	1.00	165.0000	82.5000	59.4000	0.9	0.85	1000	-1000	1000	0.1	0.01	0	0	1;
+];
+
 %% branch data
 %	fbus	tbus	r	x	b	rateA	rateB	rateC	ratio	angle	status	angmin	angmax
 mpc.branch = [
 	1	 3	 0.065	 0.62	 0.45	 9000.0	 9000.0	 9000.0	 0.0	 0.0	 1	 -30.0	 30.0;
 	3	 2	 0.025	 0.75	 0.7	 50.0	 50.0	 50.0	 0.0	 0.0	 1	 -30.0	 30.0;
 	1	 2	 0.042	 0.9	 0.3	 9000.0	 9000.0	 9000.0	 0.0	 0.0	 1	 -30.0	 30.0;
-];
-
-%% storage data
-%   storage_bus ps qs energy  energy_rating charge_rating  discharge_rating  charge_efficiency  discharge_efficiency  thermal_rating  qmin  qmax  r  x  p_loss  q_loss  status
-mpc.storage = [
-	 2	 0.0	 0.0	 1.00	 200.0	 100.0	 72.0	 0.90	 0.85	 1000.0	 -1000.0	 1000.0	 0.1	 0.01	 0.0	 0.0	 1;
 ];
 
 % INFO    : === Translation Options ===

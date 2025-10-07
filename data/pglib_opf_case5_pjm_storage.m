@@ -23,8 +23,7 @@
 %   Contact M.E. Brennan (me.brennan@ieee.org) for inquries on further reuse of
 %   this dataset.
 %
-%	Modified to have 2 storage buses added
-%
+% Modified to have additional storage capacity and increased gencost
 function mpc = pglib_opf_case5_pjm
 mpc.version = '2';
 mpc.baseMVA = 100.0;
@@ -49,7 +48,7 @@ mpc.bus = [
 %	bus	Pg	Qg	Qmax	Qmin	Vg	mBase	status	Pmax	Pmin
 mpc.gen = [
 	1	 20.0	 0.0	 30.0	 -30.0	 1.0	 100.0	 1	 40.0	 0.0;
-	2	 85.0	 0.0	 127.5	 -127.5	 1.0	 100.0	 1	 170.0	 0.0;
+	1	 85.0	 0.0	 127.5	 -127.5	 1.0	 100.0	 1	 170.0	 0.0;
 	3	 260.0	 0.0	 390.0	 -390.0	 1.0	 100.0	 1	 520.0	 0.0;
 	4	 100.0	 0.0	 150.0	 -150.0	 1.0	 100.0	 1	 200.0	 0.0;
 	5	 300.0	 0.0	 450.0	 -450.0	 1.0	 100.0	 1	 600.0	 0.0;
@@ -58,11 +57,17 @@ mpc.gen = [
 %% generator cost data
 %	2	startup	shutdown	n	c(n-1)	...	c0
 mpc.gencost = [
-	2	 0.0	 0.0	 3	   0.000000	  14.000000	   0.000000;
-	2	 0.0	 0.0	 3	   0.000000	  15.000000	   0.000000;
-	2	 0.0	 0.0	 3	   0.000000	  30.000000	   0.000000;
-	2	 0.0	 0.0	 3	   0.000000	  40.000000	   0.000000;
-	2	 0.0	 0.0	 3	   0.000000	  10.000000	   0.000000;
+2	0.0	0.0	3	0.2	14.000000	0.000000;
+2	0.0	0.0	3	0.2	15.000000	0.000000;
+2	0.0	0.0	3	0.2	30.000000	0.000000;
+2	0.0	0.0	3	0.2	40.000000	0.000000;
+2	0.0	0.0	3	0.2	10.000000	0.000000;
+];
+
+%% storage data
+%	bus	energy	energy_rating	charge_rating	discharge_rating	thermal_rating	qmin	qmax	r	x	standby_loss	status
+mpc.storage = [
+	4	0.0	0.0	1.00	600.0000	300.0000	216.0000	0.9	0.85	1000	-1000	1000	0.1	0.01	0	0	1;
 ];
 
 %% branch data
@@ -74,13 +79,6 @@ mpc.branch = [
 	2	 3	 0.00108	 0.0108	 0.01852	 426	 426	 426	 0.0	 0.0	 1	 -30.0	 30.0;
 	3	 4	 0.00297	 0.0297	 0.00674	 426	 426	 426	 0.0	 0.0	 1	 -30.0	 30.0;
 	4	 5	 0.00297	 0.0297	 0.00674	 240.0	 240.0	 240.0	 0.0	 0.0	 1	 -30.0	 30.0;
-];
-
-%% storage data
-%   storage_bus ps qs energy  energy_rating charge_rating  discharge_rating  charge_efficiency  discharge_efficiency  thermal_rating  qmin  qmax  r  x  p_loss  q_loss  status
-mpc.storage = [
-	 2	 0.0	 0.0	 1.00	 200.0	 100.0	 72.0	 0.90	 0.85	 1000.0	 -1000.0	 1000.0	 0.1	 0.01	 0.0	 0.0	 1;
-	 4	 0.0	 0.0	 1.00	 200.0	 100.0	 72.0	 0.90	 0.85	 1000.0	 -1000.0	 1000.0	 0.1	 0.01	 0.0	 0.0	 1;
 ];
 
 % INFO    : === Translation Options ===
